@@ -66,7 +66,7 @@ internal sealed class UpdateService : IDisposable
             var releaseResult = await fetch.WaitAsync(checking?.Token ?? lifetime.Token);
             userCancelled = checking?.Token.IsCancellationRequested ?? false;
             checking?.Close(); checking?.Dispose(); checking = null;
-            activeProgress = null;
+            if (!silent) activeProgress = null;
             if (releaseResult == null)
             { if (!silent) AppDialog.Show("更新源中还没有可用版本。你可以稍后再检查。", "暂无更新"); return; }
             var release = releaseResult.Value;
@@ -132,7 +132,8 @@ internal sealed class UpdateService : IDisposable
         }
         finally
         {
-            checking?.Dispose(); activeProgress = null;
+            checking?.Dispose();
+            if (!silent) activeProgress = null;
             if (downloadDirectory != null) { try { Directory.Delete(downloadDirectory, true); } catch (IOException) { } catch (UnauthorizedAccessException) { } }
             if (!silent) manualOpen = false;
         }
@@ -143,11 +144,13 @@ internal sealed class UpdateService : IDisposable
 internal sealed class UpdateProgressForm : ChromeForm
 {
     private readonly CancellationTokenSource cancellation = new();
+    private readonly CancellationToken token;
     private readonly Label status = new() { Dock = DockStyle.Fill, ForeColor = Theme.Muted, Text = "正在下载安装包…" };
     private readonly ProgressBar bar = new() { Dock = DockStyle.Top, Height = 8, Style = ProgressBarStyle.Marquee };
-    public CancellationToken Token => cancellation.Token;
+    public CancellationToken Token => token;
     public UpdateProgressForm(string title = "下载更新", string initialStatus = "正在下载安装包…")
     {
+        token = cancellation.Token;
         Text = "AudioSwitch · " + title; Icon = BrandIcon.Load(); ClientSize = new Size(500, 280);
         StartPosition = FormStartPosition.CenterScreen; Font = new Font("Microsoft YaHei UI", 10); BackColor = Color.FromArgb(243, 246, 251);
         var body = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(28, 14, 28, 20), ColumnCount = 1, RowCount = 4 };

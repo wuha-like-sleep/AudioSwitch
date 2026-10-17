@@ -59,6 +59,11 @@ internal static class SettingsStore
             throw new InvalidOperationException("Preview channel ignored an available preview update.");
         if (UpdateService.SelectRelease(releases.RootElement, stable) != null)
             throw new InvalidOperationException("Stable channel selected a preview update.");
+        using (var checking = new UpdateProgressForm("检查更新", "正在连接…"))
+        {
+            checking.Show(); checking.Close();
+            if (!checking.Token.IsCancellationRequested) throw new InvalidOperationException("Closing update progress did not cancel the request.");
+        }
         File.Delete(path);
     }
 }
