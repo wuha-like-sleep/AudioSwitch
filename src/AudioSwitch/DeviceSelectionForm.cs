@@ -5,7 +5,7 @@ internal sealed class DeviceSelectionForm : ChromeForm
     private readonly List<OutputDevice> selected;
     private List<OutputDevice> available;
     private readonly FlowLayoutPanel rows = new() { Dock = DockStyle.Fill, FlowDirection = FlowDirection.TopDown, WrapContents = false, AutoScroll = true };
-    private readonly TextBox search = new() { Dock = DockStyle.Fill, PlaceholderText = "搜索设备名称…", AccessibleName = "搜索输出设备", BorderStyle = BorderStyle.FixedSingle };
+    private readonly TextBox search = new() { Dock = DockStyle.Fill, PlaceholderText = "搜索设备名称…", AccessibleName = "搜索输出设备", BorderStyle = BorderStyle.None, BackColor = Color.White };
     private readonly Label count = new() { Dock = DockStyle.Fill, ForeColor = Theme.Muted };
     private readonly Dictionary<string, Toggle> toggles = new();
     internal string SearchQuery { get => search.Text; set => search.Text = value; }
@@ -30,7 +30,9 @@ internal sealed class DeviceSelectionForm : ChromeForm
         var remove = new ThemeButton { Text = "移出列表", Dock = DockStyle.Fill, Margin = new Padding(8, 0, 0, 0) };
         add.Click += (_, _) => AddVisibleOnline(); remove.Click += (_, _) => RemoveVisible();
         var tips = new ToolTip(); tips.SetToolTip(add, "加入当前搜索结果中的在线设备，保留原有顺序。"); tips.SetToolTip(remove, "移除当前搜索结果中的循环设备，其他设备保持不变。");
-        tools.Controls.Add(search, 0, 0); tools.Controls.Add(add, 1, 0); tools.Controls.Add(remove, 2, 0);
+        var searchSurface = new RoundedPanel { Dock = DockStyle.Fill, Padding = new Padding(12, 6, 12, 2), Margin = Padding.Empty };
+        searchSurface.Controls.Add(search);
+        tools.Controls.Add(searchSurface, 0, 0); tools.Controls.Add(add, 1, 0); tools.Controls.Add(remove, 2, 0);
         root.Controls.Add(tools, 0, 2); root.Controls.Add(count, 0, 3); root.Controls.Add(rows, 0, 4);
         FormClosed += (_, _) => tips.Dispose(); search.TextChanged += (_, _) => { rows.AutoScrollPosition = Point.Empty; Render(); };
         var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false };

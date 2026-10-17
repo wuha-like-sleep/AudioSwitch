@@ -5,9 +5,9 @@ internal sealed class ProximityForm : ChromeForm
     private readonly ComboBox phone = new DeviceComboBox();
     private readonly ComboBox mode = new DeviceComboBox();
     private readonly ComboBox delay = new DeviceComboBox();
-    private readonly NumericUpDown threshold = new() { Minimum = -120, Maximum = -20, Value = -75, Dock = DockStyle.Fill, BorderStyle = BorderStyle.FixedSingle, AccessibleName = "弱信号阈值", BackColor = Color.FromArgb(244, 246, 252) };
-    private readonly NumericUpDown hysteresis = new() { Minimum = 1, Maximum = 20, Value = 5, Dock = DockStyle.Fill, BorderStyle = BorderStyle.FixedSingle, AccessibleName = "恢复缓冲", BackColor = Color.FromArgb(244, 246, 252) };
-    private readonly RoundedPanel statusCard = new() { Dock = DockStyle.Fill, Padding = new Padding(12), Margin = new Padding(0, 8, 0, 8) };
+    private readonly NumericUpDown threshold = new() { Minimum = -120, Maximum = -20, Value = -75, Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, AccessibleName = "弱信号阈值", BackColor = Color.FromArgb(244, 246, 252) };
+    private readonly NumericUpDown hysteresis = new() { Minimum = 1, Maximum = 20, Value = 5, Dock = DockStyle.Fill, BorderStyle = BorderStyle.None, AccessibleName = "恢复缓冲", BackColor = Color.FromArgb(244, 246, 252) };
+    private readonly RoundedPanel statusCard = new() { Dock = DockStyle.Fill, Padding = new Padding(12, 8, 12, 8), Margin = new Padding(0, 8, 0, 8) };
     private readonly Queue<(int Value, DateTimeOffset At)> readings = new();
     private DateTimeOffset? lastReading;
     private readonly Toggle enabled = new() { Text = "启用手机离开锁屏", Dock = DockStyle.Fill };
@@ -48,8 +48,10 @@ internal sealed class ProximityForm : ChromeForm
             }
             catch (InvalidOperationException ex) { AppDialog.Show(this, ex.Message, "参考标定"); }
         };
-        signalRow.Controls.Add(threshold, 0, 0); signalRow.Controls.Add(calibrate, 1, 0);
-        AddField(fields, "弱信号阈值", signalRow, 4); AddField(fields, "恢复缓冲值", hysteresis, 5);
+        var thresholdSurface = NumberSurface(threshold);
+        var recoverySurface = NumberSurface(hysteresis);
+        signalRow.Controls.Add(thresholdSurface, 0, 0); signalRow.Controls.Add(calibrate, 1, 0);
+        AddField(fields, "弱信号阈值", signalRow, 4); AddField(fields, "恢复缓冲值", recoverySurface, 5);
         mode.Items.AddRange([new Choice("disconnect", "断开连接"), new Choice("signal", "实时信号较弱（实验性）"), new Choice("either", "断开或信号较弱")]);
         mode.SelectedItem = mode.Items.Cast<Choice>().FirstOrDefault(c => c.Id == settings.Mode) ?? mode.Items[0];
         foreach (int value in new[] { 15, 30, 60, 120 }) delay.Items.Add(new Choice(value.ToString(), $"{value} 秒"));
@@ -123,6 +125,11 @@ internal sealed class ProximityForm : ChromeForm
             status.Text += "\n测试（不会锁屏）：" + (testWouldLock ? "本次达到锁屏条件，测试没有执行锁屏。" : result.Message);
         }
         else status.Text += "\n可测试判定，也可在正常距离采集读数后点击参考标定。";
+    }
+    private static RoundedPanel NumberSurface(Control number)
+    {
+        var surface = new RoundedPanel { Dock = DockStyle.Fill, SurfaceColor = Color.FromArgb(244, 246, 252), Padding = new Padding(10, 6, 6, 2), Margin = new Padding(0, 3, 0, 3) };
+        surface.Controls.Add(number); return surface;
     }
     private static void AddField(TableLayoutPanel fields, string name, Control control, int row)
     {
