@@ -130,3 +130,33 @@ internal sealed class DeviceComboBox : ComboBox
         e.DrawFocusRectangle();
     }
 }
+
+internal sealed class AccentProgress : Control
+{
+    private readonly System.Windows.Forms.Timer animation = new() { Interval = 32 };
+    private int offset;
+    private int value;
+    private ProgressBarStyle style = ProgressBarStyle.Marquee;
+    public int Value { get => value; set { this.value = Math.Clamp(value, 0, 100); Invalidate(); } }
+    public ProgressBarStyle Style { get => style; set { style = value; Invalidate(); } }
+    public AccentProgress()
+    {
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
+        Height = 8; AccessibleRole = AccessibleRole.ProgressBar; TabStop = false;
+        animation.Tick += (_, _) => { if (Visible && style == ProgressBarStyle.Marquee) { offset += 5; Invalidate(); } };
+        animation.Start();
+    }
+    protected override void OnPaint(PaintEventArgs e)
+    {
+        e.Graphics.Clear(Color.FromArgb(243, 246, 251));
+        e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+        using var track = Theme.Round(new RectangleF(0, 0, Width, Height), Height / 2f);
+        using var background = new SolidBrush(Color.FromArgb(222, 228, 242));
+        using var fill = new SolidBrush(Theme.Accent);
+        e.Graphics.FillPath(background, track); e.Graphics.SetClip(track);
+        if (Style == ProgressBarStyle.Marquee)
+            e.Graphics.FillRectangle(fill, offset % (Width + 100) - 100, 0, 100, Height);
+        else e.Graphics.FillRectangle(fill, 0, 0, Width * Value / 100f, Height);
+    }
+    protected override void Dispose(bool disposing) { if (disposing) animation.Dispose(); base.Dispose(disposing); }
+}

@@ -51,9 +51,10 @@ WelcomeFontName=Microsoft YaHei UI
 WelcomeFontSize=15
 
 [Messages]
+ClickNext=点击“下一步”继续，或点击“取消”退出。
 SetupWindowTitle=安装 — AudioSwitch 音频切换
 WelcomeLabel1=让声音切换，变得简单。
-WelcomeLabel2=即将安装 AudioSwitch，在 USB 耳机与音箱之间随手切换。%n%n点击“下一步”开始安装。
+WelcomeLabel2=即将安装 AudioSwitch，在 USB 耳机与音箱之间随手切换。%n%n安装后可选择设备、自定义快捷键和设置自启动。
 ButtonBack=< 上一步(&B)
 ButtonNext=下一步(&N) >
 ButtonInstall=安装(&I)

@@ -13,7 +13,7 @@ internal sealed class AppDialog : ChromeForm
         body.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); body.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
         body.Controls.Add(new Label { Text = title.Replace("AudioSwitch · ", ""), AutoSize = false, Dock = DockStyle.Fill, Font = new Font(Font.FontFamily, 18, FontStyle.Bold) }, 0, 0);
         body.Controls.Add(new Label { Text = icon == MessageBoxIcon.Error || icon == MessageBoxIcon.Warning ? "请查看以下信息后重试" : "音频切换 · 版本与使用提示", Dock = DockStyle.Fill, ForeColor = Theme.Muted }, 0, 1);
-        var details = new TextBox { Text = text, Multiline = true, ReadOnly = true, BorderStyle = BorderStyle.None, BackColor = BackColor, ForeColor = Theme.Ink, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill, TabStop = true };
+        var details = new TextBox { Text = text.ReplaceLineEndings(Environment.NewLine), Multiline = true, ReadOnly = true, BorderStyle = BorderStyle.None, BackColor = BackColor, ForeColor = Theme.Ink, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill, TabStop = true };
         body.Controls.Add(details, 0, 2);
         var footer = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill, WrapContents = false };
         var accept = new ThemeButton { Text = buttons == MessageBoxButtons.YesNo ? "下载并安装" : "知道了", Primary = true, Size = new Size(128, 42), Margin = new Padding(10, 8, 0, 0), DialogResult = buttons == MessageBoxButtons.YesNo ? DialogResult.Yes : DialogResult.OK };

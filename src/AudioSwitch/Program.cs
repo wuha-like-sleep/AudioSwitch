@@ -37,7 +37,7 @@ internal static class Program
         }
         if (args.Contains("--preview-dialog"))
         {
-            AppDialog.Show("当前版本 0.2.1-preview.1 已是最新版本。\n\n更新通道：测试版与正式版", "已经是最新版本"); return;
+            AppDialog.Show($"当前版本 {UpdateService.CurrentTag} 已是最新版本。\n\n更新通道：测试版与正式版", "已经是最新版本"); return;
         }
         using var context = new TrayContext(args.Contains("--startup"));
         Application.Run(context);

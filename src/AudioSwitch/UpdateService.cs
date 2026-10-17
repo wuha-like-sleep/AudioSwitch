@@ -16,7 +16,7 @@ internal sealed class UpdateService : IDisposable
     private bool manualOpen;
     private UpdateProgressForm? activeProgress;
     private static string Repository => Assembly.GetExecutingAssembly().GetCustomAttributes<AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == "GitHubRepository")?.Value ?? "";
-    private static string CurrentTag => Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.2.1-preview.1";
+    internal static string CurrentTag => Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.2.1-preview.1";
     public UpdateService(Action<string> notify)
     {
         this.notify = notify;
@@ -146,7 +146,7 @@ internal sealed class UpdateProgressForm : ChromeForm
     private readonly CancellationTokenSource cancellation = new();
     private readonly CancellationToken token;
     private readonly Label status = new() { Dock = DockStyle.Fill, ForeColor = Theme.Muted, Text = "正在下载安装包…" };
-    private readonly ProgressBar bar = new() { Dock = DockStyle.Top, Height = 8, Style = ProgressBarStyle.Marquee };
+    private readonly AccentProgress bar = new() { Dock = DockStyle.Top, Height = 8, Style = ProgressBarStyle.Marquee };
     public CancellationToken Token => token;
     public UpdateProgressForm(string title = "下载更新", string initialStatus = "正在下载安装包…")
     {

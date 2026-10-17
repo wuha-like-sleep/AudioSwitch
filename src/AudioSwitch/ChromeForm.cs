@@ -63,7 +63,7 @@ internal sealed class CaptionButton(bool close, Action action) : Control
     {
         base.OnCreateControl();
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true);
-        Dock = DockStyle.Fill; Margin = Padding.Empty; TabStop = true;
+        Dock = DockStyle.Fill; Margin = Padding.Empty; TabStop = false;
         AccessibleRole = AccessibleRole.PushButton; AccessibleName = close ? "关闭设置窗口" : "最小化设置窗口";
     }
     protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
