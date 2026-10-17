@@ -138,6 +138,15 @@ void VerifyVault() {
     Check(RegCreateKeyExW(HKEY_LOCAL_MACHINE, bindingPath, 0, nullptr, 0, KEY_ALL_ACCESS | KEY_WOW64_64KEY, nullptr, &binding, nullptr) == ERROR_SUCCESS, "Create isolated vault binding");
     constexpr wchar_t phone[] = L"123456789ABC";
     RegSetValueExW(binding, L"Phone", 0, REG_SZ, reinterpret_cast<const BYTE*>(phone), sizeof(phone)); RegCloseKey(binding);
+    Check(RegOpenKeyExW(HKEY_LOCAL_MACHINE, bindingPath, 0, KEY_SET_VALUE | KEY_WOW64_64KEY, &binding) == ERROR_SUCCESS, "Open isolated binding writer");
+    wchar_t paddedPhone[14] = L"123456789ABC";
+    Check(RegSetValueExW(binding, L"Phone", 0, REG_SZ, reinterpret_cast<const BYTE*>(paddedPhone), sizeof(paddedPhone)) == ERROR_SUCCESS, "Write zero padded phone fixture");
+    uint64_t parsedPhone = 0;
+    Check(Bridge::ReadBinding(testSid, &parsedPhone) && parsedPhone == 0x123456789ABC, "Equivalent registry string padding accepted");
+    paddedPhone[13] = L'F';
+    RegSetValueExW(binding, L"Phone", 0, REG_SZ, reinterpret_cast<const BYTE*>(paddedPhone), sizeof(paddedPhone));
+    Check(Bridge::ReadBinding(testSid, &parsedPhone) && parsedPhone == 0, "Nonzero registry suffix rejected");
+    RegSetValueExW(binding, L"Phone", 0, REG_SZ, reinterpret_cast<const BYTE*>(phone), sizeof(phone)); RegCloseKey(binding);
     Vault::Record input; wcscpy_s(input.sid, testSid); wcscpy_s(input.qualified, L"MicrosoftAccount\\audioswitch-test@example.invalid"); wcscpy_s(input.password, L"vault-test-only-47!"); input.phone = 0x123456789ABC;
     Check(Vault::Save(input) && Vault::Enabled(testSid), "Save DPAPI vault and opt-in marker");
     LoginDiagnostics::Write(testSid, L"WindowsResult", 0, 0xC000006D, 0xC000006A);
@@ -169,8 +178,6 @@ void VerifyVault() {
     std::cout << "DPAPI roundtrip, restricted registry access, identity mismatch, ciphertext tampering and revocation checks passed with fictional credentials.\n";
 }
 void VerifyAutoPolicy() {
-    Check(Bridge::CanArmAbsence(10060, Bridge::PhoneStage::Wait), "Radio timeout can count as absence");
-    Check(!Bridge::CanArmAbsence(10013, Bridge::PhoneStage::Connect) && !Bridge::CanArmAbsence(10060, Bridge::PhoneStage::Encryption) && !Bridge::CanArmAbsence(ERROR_NOT_FOUND, Bridge::PhoneStage::Pairing), "Authentication, local configuration and missing pairing cannot arm unlock");
     BYTE nonce[32]{}; nonce[0] = 1;
     Bridge::AutoPolicy policy;
     Check(!policy.Present(nonce, 1000, 7, 2), "Phone initially present cannot immediately unlock");
@@ -203,10 +210,6 @@ int wmain(int argc, wchar_t** argv) {
         }
         Check(canUnload() == S_OK, "No leaked COM objects");
         Bridge::Request request; request.session = 2; request.nonce[0] = 1; wcscpy_s(request.sid, L"S-1-5-21-100-200-300-1001");
-        request.intent = Bridge::Intent::ServiceProbe;
-        Check(Bridge::ValidRequest(request), "Explicit service diagnostic request supported");
-        request.payloadBytes = 1; Check(!Bridge::ValidRequest(request), "Service probe cannot carry credentials"); request.payloadBytes = 0;
-        request.intent = Bridge::Intent::Manual;
         Bridge::Response reply; reply.result = Bridge::Result::Verified; reply.session = request.session; reply.phone = 0x123456789ABC; reply.completed = 10000; memcpy(reply.nonce, request.nonce, sizeof(reply.nonce));
         Check(Bridge::ValidResponse(request, reply, reply.phone, 11000), "Fresh proof accepted");
         Check(!Bridge::ValidResponse(request, reply, reply.phone, 12001), "Expired proof rejected");

@@ -34,11 +34,14 @@ inline bool ReadBinding(PCWSTR sid, uint64_t* phone) {
     const auto opened = RegOpenKeyExW(HKEY_LOCAL_MACHINE, path, 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &key);
     if (opened == ERROR_FILE_NOT_FOUND || opened == ERROR_PATH_NOT_FOUND) return false;
     if (opened != ERROR_SUCCESS) return true;
-    wchar_t address[13]{}; DWORD bytes = sizeof(address), type = 0;
+    wchar_t address[32]{}; DWORD bytes = sizeof(address), type = 0;
     const auto error = RegGetValueW(key, nullptr, L"Phone", RRF_RT_REG_SZ, &type, address, &bytes);
     RegCloseKey(key);
     // An existing but inaccessible/malformed binding remains enabled and fails closed.
-    if (error != ERROR_SUCCESS || bytes != sizeof(address) || address[12]) return true;
+    if (error != ERROR_SUCCESS || bytes < 12 * sizeof(wchar_t) || bytes > sizeof(address) || bytes % sizeof(wchar_t) || wcsnlen_s(address, sizeof(address) / sizeof(address[0])) != 12) return true;
+    // Registry writers may include different counts of trailing NULs. Accept
+    // only the same twelve hex digits and zero padding, never a suffix.
+    for (size_t index = 13; index < bytes / sizeof(wchar_t); ++index) if (address[index]) return true;
     uint64_t parsed = 0;
     for (size_t index = 0; index < 12; ++index) {
         wchar_t c = address[index]; unsigned digit;

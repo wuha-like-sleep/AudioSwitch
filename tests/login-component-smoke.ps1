@@ -43,7 +43,7 @@ try {
         New-Item $binding -Force | Out-Null
         & $test $registered '--deny-bound'
         if ($LASTEXITCODE -ne 0) { throw 'Missing phone value bypassed the phone gate' }
-        Set-ItemProperty $binding -Name Phone -Value '123456789ABC'
+        New-ItemProperty $binding -Name Phone -Value '123456789ABC' -PropertyType String -Force | Out-Null
         Set-ItemProperty $binding -Name Automatic -Value 1
         & $test $registered '--deny-bound'
         if ($LASTEXITCODE -ne 0) { throw 'Broker allowed a non-LogonUI caller' }
