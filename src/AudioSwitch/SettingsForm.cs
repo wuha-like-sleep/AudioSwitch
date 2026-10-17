@@ -39,15 +39,42 @@ internal sealed class SettingsForm : Form
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, Padding = new Padding(28), AutoScroll = true };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        foreach (int height in new[] { 108, 48, 156, 154, 72, 64 }) root.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
-        var hero = new RoundedPanel { Dock = DockStyle.Fill, SurfaceColor = Ink, Padding = new Padding(22), Margin = new Padding(0, 0, 0, 18) };
-        hero.Controls.Add(new Label { Text = "你的声音，随手切换。   /   开发者 wuha-like-sleep", ForeColor = Color.FromArgb(194, 204, 225), BackColor = Ink, Location = new Point(86, 62), AutoSize = true });
-        hero.Controls.Add(new Label { Text = "AudioSwitch", ForeColor = Color.White, BackColor = Ink, Font = new Font("Segoe UI", 24, FontStyle.Bold), Location = new Point(82, 14), AutoSize = true });
+        foreach (int height in new[] { 88, 48, 156, 154, 72, 64 }) root.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
+        var hero = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill, BackColor = BackColor, ColumnCount = 3, RowCount = 2,
+            Margin = new Padding(0, 0, 0, 16)
+        };
+        hero.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 58));
+        hero.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        hero.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 190));
+        hero.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
+        hero.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         using var brandIcon = BrandIcon.Load();
-        hero.Controls.Add(new PictureBox { Image = brandIcon.ToBitmap(), SizeMode = PictureBoxSizeMode.Zoom, Size = new Size(44, 44), Location = new Point(24, 26), BackColor = Ink });
-        var badge = new Label { Text = "WINDOWS 10 / 11", ForeColor = Color.FromArgb(184, 201, 255), BackColor = Color.FromArgb(42, 55, 81), AutoSize = true, Padding = new Padding(10, 6, 10, 6), Anchor = AnchorStyles.Top | AnchorStyles.Right };
-        hero.Controls.Add(badge);
-        hero.Resize += (_, _) => badge.Location = new Point(hero.ClientSize.Width - badge.Width - 22, 26);
+        var mark = new PictureBox
+        {
+            Image = brandIcon.ToBitmap(), SizeMode = PictureBoxSizeMode.Zoom,
+            Size = new Size(42, 42), Margin = new Padding(0, 9, 16, 0), BackColor = BackColor
+        };
+        hero.Controls.Add(mark, 0, 0);
+        hero.SetRowSpan(mark, 2);
+        hero.Controls.Add(new Label
+        {
+            Text = "AudioSwitch", ForeColor = Ink, Font = new Font("Segoe UI", 21, FontStyle.Bold),
+            Dock = DockStyle.Fill, TextAlign = ContentAlignment.BottomLeft, Margin = Padding.Empty
+        }, 1, 0);
+        hero.Controls.Add(new Label
+        {
+            Text = "耳机与音箱，一键切换。", ForeColor = Muted, Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.TopLeft, Padding = new Padding(1, 5, 0, 0), Margin = Padding.Empty
+        }, 1, 1);
+        var author = new Label
+        {
+            Text = "开发者  wuha-like-sleep", ForeColor = Muted, Font = new Font(Font.FontFamily, 9),
+            Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, Margin = Padding.Empty
+        };
+        hero.Controls.Add(author, 2, 0);
+        hero.SetRowSpan(author, 2);
         root.Controls.Add(hero, 0, 0);
         root.Controls.Add(new Label { Text = "01   选择你的设备", Font = new Font(Font, FontStyle.Bold), Dock = DockStyle.Fill, Padding = new Padding(0, 14, 0, 0) }, 0, 1);
         var cards = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Margin = Padding.Empty };
