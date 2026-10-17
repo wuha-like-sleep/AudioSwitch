@@ -135,3 +135,9 @@ CI 检查虚构记录的 DPAPI 往返、密文不含测试密码、受限令牌�
 资料：[CredUI](https://learn.microsoft.com/en-us/windows/win32/api/wincred/nf-wincred-creduipromptforwindowscredentialsw)、[LogonUserW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-logonuserw)、[DPAPI 范围](https://learn.microsoft.com/en-us/windows/win32/seccrypto/example-c-program-using-cryptprotectdata)、[自动默认凭据](https://learn.microsoft.com/en-us/windows/win32/api/credentialprovider/nf-credentialprovider-icredentialprovider-getcredentialcount)、[CredentialsChanged](https://learn.microsoft.com/en-us/windows/win32/api/credentialprovider/nf-credentialprovider-icredentialproviderevents-credentialschanged)。
 
 0.3.6 Preview 1 发行代码：`9cfc1eb5e6e2fced96b7be9a616686fbb3464c4f`。[Windows CI 39026011908](https://github.com/wuha-like-sleep/AudioSwitch/actions/runs/39026011908) 三架构构建成功；x64 DPAPI、受限令牌读取拒绝、篡改、身份不符、撤销、单次策略、自动线程启动/取消及无许可不通知、服务与安装检查通过。数据仅为虚构测试凭据，没有执行真实微软账户初始化或解锁。
+
+### 0.3.7：端到端验证诊断
+
+为已授权请求记录初始化、手机认证和单次证明结果；原生登录组件记录自动凭据提交及 Windows ReportResult 主状态 / 子状态。记录不含密码、邮箱、地址、nonce 或序列化凭据，不参与授权决策。设置窗口显示阶段和时间，支持复制诊断。初始化常见错误提供处理说明，登录失败显示状态码并保留 Hello / PIN。
+
+[真机验收步骤](UNLOCK-VALIDATION.md)。没有真实 iPhone / 微软账户测试机，不能把 CI 通过称为端到端解锁成功。

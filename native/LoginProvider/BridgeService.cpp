@@ -8,6 +8,7 @@
 #include <shlobj.h>
 #include <cstdio>
 #include "BridgeProtocol.h"
+#include "LoginDiagnostics.h"
 #include "BridgeClient.h"
 #include "CredentialVault.h"
 #include "AutoPolicy.h"
@@ -122,6 +123,9 @@ DWORD SaveEnrollment(const Bridge::Request& request, const BYTE* encrypted) {
 void VerifyRequest(HANDLE pipe, const Bridge::Request& request, Bridge::Response& response) {
     const auto epoch = InterlockedCompareExchange(&sessionEpoch, 0, 0);
     if (!IsLogonClient(pipe, request)) { response.result = Bridge::Result::SessionMismatch; return; }
+    struct Diagnostic { const Bridge::Request& request; const Bridge::Response& response;
+        ~Diagnostic() { LoginDiagnostics::Write(request.sid, request.intent == Bridge::Intent::Enroll ? L"Enrollment" : request.intent == Bridge::Intent::AutoCommit ? L"Commit" : L"Phone", static_cast<DWORD>(response.result), response.error); }
+    } diagnostic{request, response};
     if (request.intent == Bridge::Intent::Enroll) {
         BYTE encrypted[16384]{};
         if (!Bridge::Transfer(pipe, encrypted, request.payloadBytes, false, stopEvent)) { response.error = ERROR_READ_FAULT; return; }

@@ -25,18 +25,34 @@ internal sealed class LoginComponentForm : ChromeForm
         var userSid = WindowsIdentity.GetCurrent().User?.Value ?? "";
         void RefreshReport()
         {
-            string registration, binding, automatic;
+            string registration, binding, automatic, diagnostics = "";
             try
             {
                 using var registry = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, Environment.Is64BitOperatingSystem ? RegistryView.Registry64 : RegistryView.Registry32);
                 using var key = registry.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\Credential Providers\" + ProviderId);
                 using var bound = registry.OpenSubKey(@"SOFTWARE\AudioSwitch\LoginBridge\Bindings\" + userSid);
+                foreach (var stage in new[] { "Enrollment", "Phone", "Commit", "Submission", "WindowsResult" })
+                {
+                    if (bound?.GetValue(stage) is not byte[] data || data.Length != 24 || BitConverter.ToUInt32(data, 0) != 1) continue;
+                    var result = BitConverter.ToUInt32(data, 4); var error = BitConverter.ToUInt32(data, 8); var substatus = BitConverter.ToUInt32(data, 12);
+                    string time;
+                    try { time = DateTime.FromFileTimeUtc(BitConverter.ToInt64(data, 16)).ToLocalTime().ToString("MM-dd HH:mm:ss"); } catch { continue; }
+                    var state = stage switch
+                    {
+                        "Enrollment" => result == 6 ? "账户密码及 SID 验证通过，已保存" : "初始化失败：" + ExplainError(error),
+                        "Phone" => result switch { 1 => "认证链路通过", 3 => "手机认证链路不可用：检查蓝牙、配对及 iPhone 免提服务", 5 => "手机已连接，等待锁屏后至少 12 秒的离开再返回", 7 => "本次锁屏已经尝试，等待重新锁屏", 4 => "会话或绑定发生变化，已停止", 2 => "未找到有效手机绑定", _ => "自动提交未启用或请求被拒绝" },
+                        "Commit" => result == 1 ? "单次手机证明已消费" : "手机证明过期、会话变化或已使用，未允许提交",
+                        "Submission" => "凭据已交给 Windows；不代表认证或解锁成功",
+                        _ => result == 1 ? "Windows 返回认证通过；仍需现场确认桌面解锁" : "Windows 拒绝认证，已撤销自动凭据"
+                    };
+                    diagnostics += $"{time} · {state} [错误 0x{error:X8} / 子状态 0x{substatus:X8}]\r\n";
+                }
                 registration = key == null ? "未注册实验组件" : "已注册实验组件";
                 automatic = bound?.GetValue("Automatic") is int value && value == 1 ? "自动提交已配置（不代表已成功解锁）" : "自动提交未配置或已停用";
                 binding = bound == null ? "当前账户未绑定：保留手动密码实验模式" : "当前账户已绑定：提交前必须通过手机验证";
             }
             catch { registration = "无法读取注册状态"; binding = "无法读取绑定状态"; automatic = "自动状态未知"; }
-            report.Text = $"系统架构：{NativeRuntime} · {registration}\r\n{binding}\r\n{automatic}\r\n\r\n" +
+            report.Text = $"系统架构：{NativeRuntime} · {registration}\r\n{binding}\r\n{automatic}\r\n\r\n最近诊断（按阶段显示，时间用于核对是否同一次测试）：\r\n{(diagnostics.Length == 0 ? "尚无记录；不代表测试成功。\r\n" : diagnostics)}\r\n" +
                 "登录桥接服务使用已配对手机的经典蓝牙地址，现场建立要求认证和加密的免提服务连接。登录组件仅接受来自该系统服务、对应本次请求和会话的短时结果。服务或手机不可用时停止提交并清除密码。\r\n\r\n" +
                 "自动提交只用于同一用户已登录后锁定的会话。初始化需在本机 Windows 凭据窗口输入微软账户邮箱和账户密码，经服务验证 SID 后，使用机器 DPAPI 加密并限制为 SYSTEM / 管理员访问。管理员仍有能力访问凭据，不保存 PIN。\r\n\r\n" +
                 "默认关闭：先绑定手机，再点击“初始化并启用”。无可用账户密码时不能初始化；不支持无密码微软账户、组织账户或本地账户。Hello / PIN 继续使用系统原有入口。\r\n\r\n" +
@@ -82,7 +98,8 @@ internal sealed class LoginComponentForm : ChromeForm
             finally { if (!IsDisposed) { bind.Enabled = phoneId.Length > 0; unbind.Enabled = true; } }
         }
         bind.Click += async (_, _) => await Configure(false); unbind.Click += async (_, _) => await Configure(true);
-        actions.Controls.AddRange([bind, unbind, refresh]); root.Controls.Add(actions, 0, 3);
+        var copy = Button("复制诊断", false); copy.Width = 105; copy.Click += (_, _) => { RefreshReport(); try { Clipboard.SetText(report.Text); } catch (Exception ex) { AppDialog.Show(this, ex.Message, "无法复制诊断"); } };
+        actions.Controls.AddRange([bind, unbind, refresh, copy]); root.Controls.Add(actions, 0, 3);
         var autoActions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
         var initialize = Button("初始化并启用", true); var revoke = Button("停用并清除", false);
         async Task ConfigureAutomatic(bool clear)
@@ -102,7 +119,7 @@ internal sealed class LoginComponentForm : ChromeForm
                 RefreshReport();
             }
             catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223) { if (!IsDisposed) AppDialog.Show(this, "初始化或管理员确认已取消。", "操作已取消"); }
-            catch (Exception ex) { if (!IsDisposed) AppDialog.Show(this, ex.Message + "\n\n未能启用时请继续使用系统 Hello / PIN。", "本机凭据操作未完成"); }
+            catch (Exception ex) { if (!IsDisposed) AppDialog.Show(this, (ex is System.ComponentModel.Win32Exception native ? ExplainError((uint)native.NativeErrorCode) + $"（错误 {native.NativeErrorCode}）\n" : "") + ex.Message + "\n\n未能启用时请继续使用系统 Hello / PIN。", "本机凭据操作未完成"); }
             finally { if (!IsDisposed) initialize.Enabled = revoke.Enabled = true; }
         }
         initialize.Click += async (_, _) => await ConfigureAutomatic(false); revoke.Click += async (_, _) => await ConfigureAutomatic(true);
@@ -114,6 +131,18 @@ internal sealed class LoginComponentForm : ChromeForm
         footer.Controls.AddRange([close, download, options]); root.Controls.Add(footer, 0, 5); Controls.Add(root); root.BringToFront();
         CancelButton = close; Shown += (_, _) => { report.Select(0, 0); close.Focus(); };
     }
+    private static string ExplainError(uint error) => error switch
+    {
+        0 => "请求被拒绝或未返回详细错误，请查看阶段记录",
+        1326 => "Windows 未接受账户密码。PIN 不能代替密码；请先在系统登录选项确认账户有可用密码",
+        1317 => "验证所得账户与当前 Windows 用户不一致",
+        1215 => "账户名格式不受支持，请输入个人微软账户邮箱",
+        1062 => "桥接服务未运行或安全连接失败，请重新安装同版本 LoginLab",
+        1168 => "未找到有效手机绑定，请先绑定已配对 iPhone",
+        29 => "受保护凭据存储失败，请检查实验组件安装和权限",
+        5 => "系统拒绝访问或会话身份不匹配，请保留 Hello / PIN 并检查组件版本",
+        _ => "Windows 返回错误，请保留错误码供诊断；不要发送密码或 PIN"
+    };
     private static ThemeButton Button(string text, bool primary) => new() { Text = text, Primary = primary, Size = new Size(142, 42), Margin = new Padding(10, 8, 0, 0) };
     private static void Open(string target)
     {

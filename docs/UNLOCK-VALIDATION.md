@@ -1,0 +1,30 @@
+# iPhone / 微软账户真机验证
+
+0.3.7 Preview 1 提供诊断，不代表已完成真机端到端验证。Windows CI 没有真实 iPhone、微软账户或交互式锁屏会话。当前尚无成功验证记录。
+
+## 测试条件
+
+Windows 10 / 11 已配对 iPhone，蓝牙开启；安装同版本 AudioSwitch 与对应原生架构 LoginLab。保留 Windows Hello / PIN，确认能正常登录。微软账户必须存在可用账户密码；无密码账户不能通过此实验初始化。不要向任何人发送密码、PIN 或凭据文件。
+
+## 实际步骤
+
+1. 在“离开锁屏 → 解锁检测 → 登录组件”绑定手机，点击“初始化并启用”，只在本机 Windows 窗口输入邮箱和账户密码。
+2. 刷新状态，核对本次时间的“账户密码及 SID 验证通过，已保存”。失败时记录具体错误；1326 不能直接解释成密码输入错误，也可能是账户登录方式不兼容。请先确认系统允许密码登录。不要反复尝试以免触发账户锁定。
+3. 使用 Win+L 锁定，选择 AudioSwitch 登录实验入口。让手机离开至链路不可用，至少 12 秒且至少三次检查，再返回。手机一直在线不会触发。
+4. 本次锁屏应最多提交一次；观察是否无需确认进入桌面。若没有进入，使用原有 Hello / PIN 返回桌面。
+5. 刷新并复制诊断。核对手机、单次证明、提交和 Windows 返回结果各阶段时间。记录是否手动使用 Hello / PIN；这次手动登录不能算自动解锁成功。缺失 Windows 回调时保持“未确认”，不能凭 Submission 或系统解锁事件推断成功。
+6. 验证手机关闭蓝牙、桥接服务停止、停用并清除凭据时都不会自动提交；Hello / PIN 应始终可用。
+
+## 可回传的信息
+
+系统版本和架构、AudioSwitch / LoginLab 版本、复制出的诊断、现场是否自动进入桌面、是否手动使用了 Hello / PIN。诊断只记录各阶段结果、UTC 时间和系统错误码；不包含密码、邮箱、手机地址或认证证明。分享前仍请检查文本。
+
+## 结果解释
+
+- Phone：现场认证连接结果，不是人与手机在场证明，也不是成功登录。
+- Commit：一次性手机证明被消费，不是 Windows 认证结果。
+- Submission：凭据交给 Windows，不代表认证成功。
+- WindowsResult：LogonUI 的认证回调，保留主状态和子状态；失败会撤销自动凭据。
+- 各阶段独立记录最后时间，可能来自不同尝试，必须按时间核对，不能拼接成一次成功。
+
+ReportResult 的状态和子状态来自 Windows 认证结果，参考 [Microsoft 文档](https://learn.microsoft.com/en-us/windows/win32/api/credentialprovider/nf-credentialprovider-icredentialprovidercredential-reportresult)。记录只用于诊断，绝不参与认证决策。不会过滤、包装或替换系统 Hello / PIN。

@@ -1,3 +1,4 @@
+#include "LoginDiagnostics.h"
 // Copyright (c) 2026 wuha-like-sleep. Licensed under the MIT license.
 #define SECURITY_WIN32
 #include <windows.h>
@@ -138,6 +139,11 @@ void VerifyVault() {
     RegSetValueExW(binding, L"Phone", 0, REG_SZ, reinterpret_cast<const BYTE*>(phone), sizeof(phone)); RegCloseKey(binding);
     Vault::Record input; wcscpy_s(input.sid, testSid); wcscpy_s(input.qualified, L"MicrosoftAccount\\audioswitch-test@example.invalid"); wcscpy_s(input.password, L"vault-test-only-47!"); input.phone = 0x123456789ABC;
     Check(Vault::Save(input) && Vault::Enabled(testSid), "Save DPAPI vault and opt-in marker");
+    LoginDiagnostics::Write(testSid, L"WindowsResult", 0, 0xC000006D, 0xC000006A);
+    Check(RegOpenKeyExW(HKEY_LOCAL_MACHINE, bindingPath, 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &binding) == ERROR_SUCCESS, "Open diagnostic metadata");
+    LoginDiagnostics::Record diagnostic; DWORD diagnosticBytes = sizeof(diagnostic), diagnosticType = 0;
+    Check(RegQueryValueExW(binding, L"WindowsResult", nullptr, &diagnosticType, reinterpret_cast<BYTE*>(&diagnostic), &diagnosticBytes) == ERROR_SUCCESS && diagnosticType == REG_BINARY && diagnosticBytes == 24 && diagnostic.version == 1 && diagnostic.result == 0 && diagnostic.error == 0xC000006D && diagnostic.substatus == 0xC000006A && diagnostic.utc != 0, "Diagnostic preserves authentication failure and substatus without secrets");
+    RegCloseKey(binding);
     Vault::Record output;
     Check(Vault::Load(testSid, input.qualified, output) && wcscmp(input.password, output.password) == 0, "Vault protected roundtrip");
     Check(!Vault::Load(testSid, L"MicrosoftAccount\\other@example.invalid", output), "Wrong account cannot load vault");

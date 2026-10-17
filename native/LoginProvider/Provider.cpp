@@ -1,3 +1,4 @@
+#include "LoginDiagnostics.h"
 // Copyright (c) 2026 wuha-like-sleep. Licensed under the MIT license.
 #define SECURITY_WIN32
 #include <windows.h>
@@ -157,15 +158,21 @@ public:
         serialized->clsidCredentialProvider = AudioSwitchLoginProviderId;
         serialized->cbSerialization = bytes;
         serialized->rgbSerialization = buffer;
+        if (automaticSubmitted) LoginDiagnostics::Write(sid, L"Submission", 1);
         *response = CPGSR_RETURN_CREDENTIAL_FINISHED;
         return S_OK; // LogonUI owns the buffer and Windows decides whether it authenticates.
     }
-    IFACEMETHODIMP ReportResult(NTSTATUS statusCode, NTSTATUS, PWSTR* status, CREDENTIAL_PROVIDER_STATUS_ICON* icon) override {
+    IFACEMETHODIMP ReportResult(NTSTATUS statusCode, NTSTATUS substatus, PWSTR* status, CREDENTIAL_PROVIDER_STATUS_ICON* icon) override {
         if (!status || !icon) return E_POINTER;
         *status = nullptr; *icon = CPSI_NONE; SetDeselected();
+        if (automaticSubmitted) LoginDiagnostics::Write(sid, L"WindowsResult", statusCode < 0 ? 0 : 1, static_cast<DWORD>(statusCode), static_cast<DWORD>(substatus));
         if (automaticSubmitted && statusCode < 0) Vault::Revoke(sid);
         automaticSubmitted = false;
-        if (statusCode < 0) { *icon = CPSI_ERROR; return CopyText(L"Windows 未接受该凭据。请使用其他登录选项中的 PIN / Windows Hello。", status); }
+        if (statusCode < 0) {
+            *icon = CPSI_ERROR; wchar_t message[256]{};
+            swprintf_s(message, L"Windows 未接受该凭据（状态 0x%08lX，子状态 0x%08lX）。请使用系统 PIN / Windows Hello；自动提交失败后需重新初始化。", static_cast<DWORD>(statusCode), static_cast<DWORD>(substatus));
+            return CopyText(message, status);
+        }
         return S_OK;
     }
 };
