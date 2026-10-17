@@ -58,7 +58,10 @@ try {
         $probeStart.ArgumentList.Add('S-1-5-21-100-200-300-1001')
         $probeProcess = [Diagnostics.Process]::Start($probeStart)
         $probeProcess.WaitForExit()
-        if ($probeProcess.ExitCode -ne 5) { throw "Desktop service probe did not reach the SID gate: $($probeProcess.ExitCode)" }
+        $probeSession = [Diagnostics.Process]::GetCurrentProcess().SessionId
+        $expectedProbeExit = if ($probeSession -eq 0) { 1062 } else { 5 }
+        if ($probeProcess.ExitCode -ne $expectedProbeExit) { throw "Desktop probe launch did not fail closed at the expected gate: $($probeProcess.ExitCode), session $probeSession" }
+        Add-Content (Join-Path $PSScriptRoot '../artifacts/login-component-checks.txt') "Runas / ArgumentList launch returned $($probeProcess.ExitCode) in session $probeSession; session zero has no interactive sign-in context."
         $probeProcess.Dispose()
         if ((Get-ItemProperty $binding).Automatic -ne 1) { throw 'Service probe changed automatic enrollment' }
         Stop-Service 'AudioSwitchLoginBridge'

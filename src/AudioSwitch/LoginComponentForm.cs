@@ -26,7 +26,7 @@ internal sealed class LoginComponentForm : ChromeForm
         void RefreshReport()
         {
             string registration, binding, automatic, componentVersion = "未知", diagnostics = "";
-            bool initializationFailed = false;
+            bool initializationFailed = false, brokenBinding = false;
             try
             {
                 using var registry = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, Environment.Is64BitOperatingSystem ? RegistryView.Registry64 : RegistryView.Registry32);
@@ -34,7 +34,7 @@ internal sealed class LoginComponentForm : ChromeForm
                 using var bound = registry.OpenSubKey(@"SOFTWARE\AudioSwitch\LoginBridge\Bindings\" + userSid);
                 foreach (var stage in new[] { "Enrollment", "Phone", "ServiceProbe", "Commit", "Submission", "WindowsResult" })
                 {
-                    if (bound?.GetValue(stage) is not byte[] data || data.Length != 24 || BitConverter.ToUInt32(data, 0) != 1) continue;
+                    if ((bound?.GetValue("Diagnostic." + stage) ?? bound?.GetValue(stage)) is not byte[] data || data.Length != 24 || BitConverter.ToUInt32(data, 0) != 1) continue;
                     var result = BitConverter.ToUInt32(data, 4);
                     if (stage == "Enrollment") initializationFailed = result != 6; var error = BitConverter.ToUInt32(data, 8); var substatus = BitConverter.ToUInt32(data, 12);
                     string time;
@@ -51,10 +51,11 @@ internal sealed class LoginComponentForm : ChromeForm
                     };
                     diagnostics += $"{time} · {state} [错误 {error} / 0x{error:X8}；{(stage is "Phone" or "ServiceProbe" ? "蓝牙阶段" : "子状态")} 0x{substatus:X8}]\r\n";
                 }
+                brokenBinding = bound != null && bound.GetValue("Phone") is not string;
                 componentVersion = LoginComponentInstaller.InstalledVersion;
                 registration = key == null ? "未注册实验组件" : "已注册实验组件";
-                automatic = bound?.GetValue("Automatic") is int value && value == 1 ? (initializationFailed ? "此前自动配置仍保留；最近一次初始化失败，不能视为本次启用成功" : "自动提交已配置（不代表已成功解锁）") : "自动提交未配置或已停用";
-                binding = bound == null ? "当前账户未绑定：保留手动密码实验模式" : "当前账户已绑定：提交前必须通过手机验证";
+                automatic = brokenBinding ? "手机绑定地址不可用，自动提交不能工作；请重新绑定手机后初始化" : bound?.GetValue("Automatic") is int value && value == 1 ? (initializationFailed ? "此前自动配置仍保留；最近一次初始化失败，不能视为本次启用成功" : "自动提交已配置（不代表已成功解锁）") : "自动提交未配置或已停用";
+                binding = brokenBinding ? "手机地址缺失或被旧版诊断覆盖：请升级组件后重新绑定所选手机" : bound == null ? "当前账户未绑定：保留手动密码实验模式" : "当前账户已绑定：提交前必须通过手机验证";
             }
             catch { registration = "无法读取注册状态"; binding = "无法读取绑定状态"; automatic = "自动状态未知"; }
             report.Text = $"系统架构：{NativeRuntime} · {registration}\r\n主程序：{UpdateService.CurrentTag}；磁盘组件：{componentVersion}\r\n{binding}\r\n{automatic}\r\n\r\n最近诊断（按阶段显示，时间用于核对是否同一次测试）：\r\n{(diagnostics.Length == 0 ? "尚无记录；不代表测试成功。\r\n" : diagnostics)}\r\n" +

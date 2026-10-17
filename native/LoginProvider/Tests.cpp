@@ -152,8 +152,10 @@ void VerifyVault() {
     LoginDiagnostics::Write(testSid, L"WindowsResult", 0, 0xC000006D, 0xC000006A);
     Check(RegOpenKeyExW(HKEY_LOCAL_MACHINE, bindingPath, 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &binding) == ERROR_SUCCESS, "Open diagnostic metadata");
     LoginDiagnostics::Record diagnostic; DWORD diagnosticBytes = sizeof(diagnostic), diagnosticType = 0;
-    Check(RegQueryValueExW(binding, L"WindowsResult", nullptr, &diagnosticType, reinterpret_cast<BYTE*>(&diagnostic), &diagnosticBytes) == ERROR_SUCCESS && diagnosticType == REG_BINARY && diagnosticBytes == 24 && diagnostic.version == 1 && diagnostic.result == 0 && diagnostic.error == 0xC000006D && diagnostic.substatus == 0xC000006A && diagnostic.utc != 0, "Diagnostic preserves authentication failure and substatus without secrets");
+    Check(RegQueryValueExW(binding, L"Diagnostic.WindowsResult", nullptr, &diagnosticType, reinterpret_cast<BYTE*>(&diagnostic), &diagnosticBytes) == ERROR_SUCCESS && diagnosticType == REG_BINARY && diagnosticBytes == 24 && diagnostic.version == 1 && diagnostic.result == 0 && diagnostic.error == 0xC000006D && diagnostic.substatus == 0xC000006A && diagnostic.utc != 0, "Diagnostic preserves authentication failure and substatus without secrets");
     RegCloseKey(binding);
+    LoginDiagnostics::Write(testSid, L"Phone", 0, 1062);
+    Check(Bridge::ReadBinding(testSid, &parsedPhone) && parsedPhone == input.phone, "Writing phone diagnostics cannot overwrite the phone address");
     Vault::Record output;
     Check(Vault::Load(testSid, input.qualified, output) && wcscmp(input.password, output.password) == 0, "Vault protected roundtrip");
     Check(!Vault::Load(testSid, L"MicrosoftAccount\\other@example.invalid", output), "Wrong account cannot load vault");

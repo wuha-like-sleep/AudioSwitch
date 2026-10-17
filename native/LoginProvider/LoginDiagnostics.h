@@ -15,7 +15,9 @@ inline void Write(PCWSTR sid, PCWSTR stage, DWORD result, DWORD error = 0, DWORD
     FILETIME time{}; GetSystemTimeAsFileTime(&time);
     Record record; record.result = result; record.error = error; record.substatus = substatus;
     record.utc = (static_cast<ULONGLONG>(time.dwHighDateTime) << 32) | time.dwLowDateTime;
-    RegSetValueExW(key, stage, 0, REG_BINARY, reinterpret_cast<const BYTE*>(&record), sizeof(record));
+    wchar_t name[64]{};
+    if (swprintf_s(name, L"Diagnostic.%s", stage) < 0) { RegCloseKey(key); return; }
+    RegSetValueExW(key, name, 0, REG_BINARY, reinterpret_cast<const BYTE*>(&record), sizeof(record));
     RegCloseKey(key);
 }
 }
