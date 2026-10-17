@@ -40,7 +40,7 @@ internal sealed class LoginComponentForm : ChromeForm
                     var state = stage switch
                     {
                         "Enrollment" => result == 6 ? "账户密码及 SID 验证通过，已保存" : "初始化失败：" + ExplainError(error),
-                        "Phone" => result switch { 1 => "认证链路通过", 3 => "手机认证链路不可用：检查蓝牙、配对及 iPhone 免提服务", 5 => "手机已连接，等待锁屏后至少 12 秒的离开再返回", 7 => "本次锁屏已经尝试，等待重新锁屏", 4 => "会话或绑定发生变化，已停止", 2 => "未找到有效手机绑定", _ => "自动提交未启用或请求被拒绝" },
+                        "Phone" => error != 0 ? ExplainError(error) : result switch { 1 => "认证链路通过", 3 => "手机认证链路不可用：检查蓝牙、配对及 iPhone 免提服务", 5 => "手机已连接，等待锁屏后至少 12 秒的离开再返回", 7 => "本次锁屏已经尝试，等待重新锁屏", 4 => "会话或绑定发生变化，已停止", 2 => "未找到有效手机绑定", _ => "自动提交未启用或请求被拒绝" },
                         "Commit" => result == 1 ? "单次手机证明已消费" : "手机证明过期、会话变化或已使用，未允许提交",
                         "Submission" => "凭据已交给 Windows；不代表认证或解锁成功",
                         _ => result == 1 ? "Windows 返回认证通过；仍需现场确认桌面解锁" : "Windows 拒绝认证，已撤销自动凭据"

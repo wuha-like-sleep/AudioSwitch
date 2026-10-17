@@ -2,6 +2,7 @@
 #include <bcrypt.h>
 #include <objbase.h>
 #include "BridgeProtocol.h"
+#include "LoginDiagnostics.h"
 #include "BridgeClient.h"
 namespace {
 bool IsServiceProcess(HANDLE pipe) {
@@ -37,7 +38,10 @@ bool PhoneRequest(PCWSTR sid, Bridge::Intent intent, PhoneApproval* approval, HA
     if (wcsncpy_s(request.sid, sid, _TRUNCATE) != 0) return false;
     if (intent == Bridge::Intent::AutoCommit && approval) memcpy(request.proof, approval->nonce, sizeof(request.proof));
     Bridge::Response response;
-    const bool valid = Exchange(request, response, cancel) && Bridge::ValidResponse(request, response, phone, GetTickCount64());
+    const bool exchanged = Exchange(request, response, cancel);
+    if (!exchanged && (!cancel || WaitForSingleObject(cancel, 0) != WAIT_OBJECT_0))
+        LoginDiagnostics::Write(sid, intent == Bridge::Intent::AutoCommit ? L"Commit" : L"Phone", 0, ERROR_SERVICE_NOT_ACTIVE);
+    const bool valid = exchanged && Bridge::ValidResponse(request, response, phone, GetTickCount64());
     uint64_t current = 0;
     if (!valid || !Bridge::ReadBinding(sid, &current) || current != phone) return false;
     if (intent == Bridge::Intent::AutoProbe && approval) { memcpy(approval->nonce, request.nonce, sizeof(approval->nonce)); approval->completed = response.completed; }
