@@ -34,8 +34,11 @@ jobs:
           path: artifacts/installer/AudioSwitch-Setup-${{ matrix.runtime }}.exe
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
-        if: matrix.runtime == 'win-x64'
+        if: always() && matrix.runtime == 'win-x64'
         with:
           name: Settings-preview
-          path: artifacts/settings*preview.png
+          path: |
+            artifacts/*preview.png
+            artifacts/audio-interfaces.txt
+            artifacts/settings-checks.txt
           if-no-files-found: error

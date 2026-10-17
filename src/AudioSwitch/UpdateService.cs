@@ -1,5 +1,4 @@
 using System.Diagnostics;
-using System.Net;
 using System.Net.Http;
 using System.Reflection;
 using System.Runtime.InteropServices;
@@ -12,65 +11,93 @@ internal sealed class UpdateService : IDisposable
 {
     private readonly HttpClient http = new() { Timeout = TimeSpan.FromMinutes(5) };
     private readonly CancellationTokenSource lifetime = new();
-    private bool busy;
     private readonly Action<string> notify;
-    private static string Repository => Assembly.GetExecutingAssembly().GetCustomAttributes<AssemblyMetadataAttribute>()
-        .FirstOrDefault(a => a.Key == "GitHubRepository")?.Value ?? "";
+    private Task<JsonElement?>? fetch;
+    private bool manualOpen;
+    private UpdateProgressForm? activeProgress;
+    private static string Repository => Assembly.GetExecutingAssembly().GetCustomAttributes<AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == "GitHubRepository")?.Value ?? "";
+    private static string CurrentTag => Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.2.1-preview.1";
     public UpdateService(Action<string> notify)
     {
         this.notify = notify;
-        http.DefaultRequestHeaders.UserAgent.ParseAdd("AudioSwitch/0.2.0");
+        http.DefaultRequestHeaders.UserAgent.ParseAdd("AudioSwitch/0.2.1");
         http.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
     }
+    private async Task<JsonElement?> FetchReleaseAsync()
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+        deadline.CancelAfter(TimeSpan.FromSeconds(15));
+        using var response = await http.GetAsync($"https://api.github.com/repos/{Repository}/releases?per_page=20", deadline.Token);
+        response.EnsureSuccessStatusCode();
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(deadline.Token));
+        if (!ReleaseVersion.TryParse(CurrentTag, out var current)) throw new InvalidOperationException("当前版本标识无效。");
+        return SelectRelease(document.RootElement, current);
+    }
+    internal static JsonElement? SelectRelease(JsonElement releases, ReleaseVersion current)
+    {
+        var candidates = releases.EnumerateArray()
+            .Where(r => !r.GetProperty("draft").GetBoolean())
+            .Where(r => current.IsPreview || !r.GetProperty("prerelease").GetBoolean())
+            .Select(r => (Release: r, Parsed: ReleaseVersion.TryParse(r.GetProperty("tag_name").GetString() ?? "", out var v), Version: v))
+            .Where(r => r.Parsed).OrderByDescending(r => r.Version).ToList();
+        return candidates.Count == 0 ? null : candidates[0].Release.Clone();
+    }
+
     public async Task CheckAsync(bool silent)
     {
-        if (busy) return;
-        busy = true;
+        if (manualOpen)
+        {
+            if (!silent && activeProgress is { IsDisposed: false }) activeProgress.Activate();
+            return;
+        }
+        if (!silent) manualOpen = true;
+        UpdateProgressForm? checking = null;
         string? downloadDirectory = null;
+        bool userCancelled = false;
         try
         {
-            if (!Regex.IsMatch(Repository, @"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"))
+            if (!Regex.IsMatch(Repository, @"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")) throw new InvalidOperationException("此构建尚未连接 GitHub 更新源。");
+            if (!silent)
             {
-                if (!silent) MessageBox.Show("此构建尚未连接 GitHub 更新源。正式发布后将启用在线更新。", "AudioSwitch · 更新");
-                return;
+                checking = new UpdateProgressForm("检查更新", "正在连接 GitHub…");
+                activeProgress = checking; checking.Show();
             }
-            using var response = await http.GetAsync($"https://api.github.com/repos/{Repository}/releases/latest", lifetime.Token);
-            if (response.StatusCode == HttpStatusCode.NotFound)
-            { if (!silent) MessageBox.Show("还没有可用的正式版本。", "AudioSwitch · 更新"); return; }
-            response.EnsureSuccessStatusCode();
-            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync(lifetime.Token));
-            var release = document.RootElement;
-            var tag = release.GetProperty("tag_name").GetString() ?? "";
-            if (!Version.TryParse(tag.TrimStart('v', 'V'), out var latest)) throw new InvalidOperationException("发布版本号应为 v主版本.次版本.修订号。");
-            var current = Assembly.GetExecutingAssembly().GetName().Version ?? new Version(0, 0, 0);
-            if (new Version(latest.Major, latest.Minor, Math.Max(0, latest.Build)) <= new Version(current.Major, current.Minor, current.Build))
-            { if (!silent) MessageBox.Show($"当前已是最新版本 {current.ToString(3)}。", "AudioSwitch · 更新"); return; }
+            if (fetch == null || fetch.IsCompleted) fetch = FetchReleaseAsync();
+            var releaseResult = await fetch.WaitAsync(checking?.Token ?? lifetime.Token);
+            userCancelled = checking?.Token.IsCancellationRequested ?? false;
+            checking?.Close(); checking?.Dispose(); checking = null;
+            activeProgress = null;
+            if (releaseResult == null)
+            { if (!silent) AppDialog.Show("更新源中还没有可用版本。你可以稍后再检查。", "暂无更新"); return; }
+            var release = releaseResult.Value;
+            var tag = release.GetProperty("tag_name").GetString()!;
+            _ = ReleaseVersion.TryParse(tag, out var latest);
+            _ = ReleaseVersion.TryParse(CurrentTag, out var current);
+            if (latest.CompareTo(current) <= 0)
+            { if (!silent) AppDialog.Show($"当前版本 {CurrentTag} 已是最新版本。\n\n更新通道：{(current.IsPreview ? "测试版与正式版" : "正式版")}", "已经是最新版本"); return; }
+            if (silent) { notify($"发现新版本 {tag}，请从托盘菜单选择“检查更新”安装。"); return; }
             string runtime = RuntimeInformation.ProcessArchitecture switch { Architecture.X64 => "win-x64", Architecture.Arm64 => "win-arm64", Architecture.X86 => "win-x86", _ => throw new NotSupportedException("不支持此处理器架构。") };
             string filename = $"AudioSwitch-Setup-{runtime}.exe";
-            JsonElement asset = release.GetProperty("assets").EnumerateArray().FirstOrDefault(a => a.GetProperty("name").GetString() == filename);
+            var asset = release.GetProperty("assets").EnumerateArray().FirstOrDefault(a => a.GetProperty("name").GetString() == filename);
             if (asset.ValueKind == JsonValueKind.Undefined) throw new InvalidOperationException("新版尚未提供此架构的安装包，请稍后重试。");
             string digest = asset.TryGetProperty("digest", out var d) ? d.GetString() ?? "" : "";
             if (!Regex.IsMatch(digest, "^sha256:[a-fA-F0-9]{64}$")) throw new InvalidOperationException("安装包缺少 SHA-256 校验信息，无法自动安装。");
-            string url = asset.GetProperty("browser_download_url").GetString() ?? "";
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != "https" || uri.Host != "github.com" || !uri.AbsolutePath.StartsWith($"/{Repository}/releases/download/", StringComparison.OrdinalIgnoreCase))
-                throw new InvalidOperationException("安装包地址不属于项目的 GitHub Releases。");
+            if (!Uri.TryCreate(asset.GetProperty("browser_download_url").GetString(), UriKind.Absolute, out var uri) || uri.Scheme != "https" || uri.Host != "github.com" || !uri.AbsolutePath.StartsWith($"/{Repository}/releases/download/", StringComparison.OrdinalIgnoreCase)) throw new InvalidOperationException("安装包地址不属于项目的 GitHub Releases。");
             string notes = release.TryGetProperty("body", out var body) ? body.GetString() ?? "" : "";
-            if (notes.Length > 1000) notes = notes[..1000] + "…";
-            if (silent) { notify($"发现新版本 {latest}，请从托盘菜单选择“检查更新”安装。"); return; }
-            if (MessageBox.Show($"发现新版本 {latest}（当前 {current.ToString(3)}）。\n\n{notes}\n\n下载完成后将退出应用并打开安装向导，保留设备设置。现在更新？", "AudioSwitch · 发现更新", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
+            if (notes.Length > 1200) notes = notes[..1200] + "…";
+            if (AppDialog.Show($"{CurrentTag}  →  {tag}\n\n{notes}\n\n安装时会退出应用，并保留设备和快捷键设置。", "发现新版本", MessageBoxButtons.YesNo) != DialogResult.Yes) return;
             downloadDirectory = Path.Combine(Path.GetTempPath(), "AudioSwitch-Update-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(downloadDirectory);
             string target = Path.Combine(downloadDirectory, filename);
             using var progress = new UpdateProgressForm();
-            progress.Show();
+            activeProgress = progress; progress.Show();
             using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, progress.Token);
             using (var download = await http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellation.Token))
             {
                 download.EnsureSuccessStatusCode();
                 await using var input = await download.Content.ReadAsStreamAsync(cancellation.Token);
                 await using var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None, 81920, true);
-                byte[] buffer = new byte[81920]; long total = 0;
-                int read;
+                byte[] buffer = new byte[81920]; long total = 0; int read;
                 while ((read = await input.ReadAsync(buffer, cancellation.Token)) != 0)
                 {
                     total += read;
@@ -80,6 +107,7 @@ internal sealed class UpdateService : IDisposable
                 }
             }
             cancellation.Token.ThrowIfCancellationRequested();
+            progress.SetStatus("正在校验安装包…");
             await using (var file = File.OpenRead(target))
             {
                 string actual = Convert.ToHexString(await SHA256.HashDataAsync(file, cancellation.Token));
@@ -87,35 +115,52 @@ internal sealed class UpdateService : IDisposable
             }
             progress.Close();
             Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
-            downloadDirectory = null; // Keep the installer while Windows executes it; the OS temp cleanup can reclaim it later.
+            downloadDirectory = null;
             Application.Exit();
         }
-        catch (OperationCanceledException) { }
-        catch (Exception ex) { if (!silent || downloadDirectory != null) MessageBox.Show("更新未完成：" + ex.Message, "AudioSwitch · 更新", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        catch (OperationCanceledException)
+        {
+            userCancelled = checking?.Token.IsCancellationRequested ?? userCancelled;
+            checking?.Close();
+            if (!silent && !userCancelled && !lifetime.IsCancellationRequested && downloadDirectory == null)
+                AppDialog.Show("连接 GitHub 超时。请检查网络后重试。", "检查更新超时", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        catch (Exception ex)
+        {
+            checking?.Close();
+            if (!silent || downloadDirectory != null) AppDialog.Show("更新未完成：" + ex.Message, "更新未完成", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
         finally
         {
+            checking?.Dispose(); activeProgress = null;
             if (downloadDirectory != null) { try { Directory.Delete(downloadDirectory, true); } catch (IOException) { } catch (UnauthorizedAccessException) { } }
-            busy = false;
+            if (!silent) manualOpen = false;
         }
     }
-    public void Dispose() { lifetime.Cancel(); http.Dispose(); lifetime.Dispose(); }
+    public void Dispose() { lifetime.Cancel(); http.Dispose(); }
 }
 
-internal sealed class UpdateProgressForm : Form
+internal sealed class UpdateProgressForm : ChromeForm
 {
     private readonly CancellationTokenSource cancellation = new();
-    private readonly Label status = new() { Dock = DockStyle.Top, Height = 42, Text = "正在下载安装包…" };
-    private readonly ProgressBar bar = new() { Dock = DockStyle.Top, Height = 12, Style = ProgressBarStyle.Marquee };
+    private readonly Label status = new() { Dock = DockStyle.Fill, ForeColor = Theme.Muted, Text = "正在下载安装包…" };
+    private readonly ProgressBar bar = new() { Dock = DockStyle.Top, Height = 8, Style = ProgressBarStyle.Marquee };
     public CancellationToken Token => cancellation.Token;
-    public UpdateProgressForm()
+    public UpdateProgressForm(string title = "下载更新", string initialStatus = "正在下载安装包…")
     {
-        Text = "AudioSwitch · 下载更新"; ClientSize = new Size(420, 140); Padding = new Padding(22);
-        StartPosition = FormStartPosition.CenterScreen; FormBorderStyle = FormBorderStyle.FixedDialog; MaximizeBox = false; MinimizeBox = false;
-        Font = new Font("Microsoft YaHei UI", 10); BackColor = Color.FromArgb(243, 246, 251);
-        var cancel = new Button { Text = "取消下载", Dock = DockStyle.Bottom, Height = 32 };
-        cancel.Click += (_, _) => Close(); Controls.AddRange([bar, status, cancel]);
+        Text = "AudioSwitch · " + title; Icon = BrandIcon.Load(); ClientSize = new Size(500, 280);
+        StartPosition = FormStartPosition.CenterScreen; Font = new Font("Microsoft YaHei UI", 10); BackColor = Color.FromArgb(243, 246, 251);
+        var body = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(28, 14, 28, 20), ColumnCount = 1, RowCount = 4 };
+        body.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); body.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); body.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); body.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
+        body.Controls.Add(new Label { Text = title, Dock = DockStyle.Fill, Font = new Font(Font.FontFamily, 18, FontStyle.Bold), ForeColor = Theme.Ink }, 0, 0);
+        status.Text = initialStatus; body.Controls.Add(status, 0, 1); body.Controls.Add(bar, 0, 2);
+        var footer = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill };
+        var cancel = new ThemeButton { Text = "取消", Size = new Size(110, 42) };
+        cancel.Click += (_, _) => Close(); footer.Controls.Add(cancel); body.Controls.Add(footer, 0, 3);
+        Controls.Add(body); body.BringToFront(); CancelButton = cancel;
         FormClosing += (_, _) => cancellation.Cancel();
     }
+    public void SetStatus(string text) => status.Text = text;
     public void Report(long bytes, long? total)
     {
         if (IsDisposed) return;

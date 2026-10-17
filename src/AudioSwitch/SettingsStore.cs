@@ -46,6 +46,19 @@ internal static class SettingsStore
             if (!StartupService.Enabled) throw new InvalidOperationException("Enabling startup failed.");
         }
         finally { StartupService.SetEnabled(original); }
+        if (!ReleaseVersion.TryParse("0.2.0-preview.1", out var oldPreview)
+            || !ReleaseVersion.TryParse("0.2.1-preview.1", out var newPreview)
+            || !ReleaseVersion.TryParse("0.2.1", out var stable)
+            || newPreview.CompareTo(oldPreview) <= 0 || stable.CompareTo(newPreview) <= 0
+            || ReleaseVersion.TryParse("not-a-version", out _))
+            throw new InvalidOperationException("Update version ordering failed.");
+        using var releases = JsonDocument.Parse("""
+            [{"draft":false,"prerelease":true,"tag_name":"v0.2.1-preview.1"}]
+            """);
+        if (UpdateService.SelectRelease(releases.RootElement, oldPreview) == null)
+            throw new InvalidOperationException("Preview channel ignored an available preview update.");
+        if (UpdateService.SelectRelease(releases.RootElement, stable) != null)
+            throw new InvalidOperationException("Stable channel selected a preview update.");
         File.Delete(path);
     }
 }

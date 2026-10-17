@@ -2,7 +2,7 @@
   #define Runtime "win-x64"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.2.0"
+  #define AppVersion "0.2.1"
 #endif
 #ifndef SourceDir
   #define SourceDir "..\artifacts\" + Runtime
@@ -27,7 +27,10 @@ OutputBaseFilename=AudioSwitch-Setup-{#Runtime}
 SetupIconFile=..\src\AudioSwitch\Assets\app.ico
 UninstallDisplayIcon={app}\AudioSwitch.exe
 LicenseFile=..\LICENSE
-WizardStyle=modern
+WizardStyle=modern light windows11 includetitlebar
+WizardImageFile=assets\wizard.bmp
+WizardSmallImageFile=assets\wizard-small.bmp
+DisableWelcomePage=no
 Compression=lzma2
 SolidCompression=yes
 AppMutex=Local\AudioSwitch.Tray
@@ -42,6 +45,10 @@ Name: "chinese"; MessagesFile: "compiler:Default.isl"
 [LangOptions]
 LanguageName=简体中文
 LanguageID=$0804
+DialogFontName=Microsoft YaHei UI
+DialogFontSize=9
+WelcomeFontName=Microsoft YaHei UI
+WelcomeFontSize=15
 
 [Messages]
 SetupWindowTitle=安装 — AudioSwitch 音频切换
@@ -65,6 +72,38 @@ FinishedLabelNoIcons=AudioSwitch 已安装。点击“完成”，开始设置�
 FinishedLabel=AudioSwitch 已安装。点击“完成”，开始设置你的耳机和音箱。
 UninstallAppFullTitle=卸载 AudioSwitch
 ConfirmUninstall=确定卸载 AudioSwitch？设备配置将保留，便于下次安装。
+SetupAppTitle=安装
+UninstallAppTitle=卸载
+InformationTitle=提示
+ButtonOK=确定
+ButtonYes=是(&Y)
+ButtonNo=否(&N)
+ButtonWizardBrowse=浏览(&B)...
+WizardLicense=开源许可证
+LicenseLabel=AudioSwitch 使用 MIT 开源许可证。
+LicenseLabel3=继续安装前，请阅读以下开源许可证。
+LicenseAccepted=我接受许可证条款(&A)
+LicenseNotAccepted=我不接受许可证条款(&D)
+WizardSelectDir=安装位置
+SelectDirBrowseLabel=点击“下一步”继续，或点击“浏览”选择其他位置。
+WizardSelectTasks=启动与快捷方式
+WizardReady=准备安装
+ReadyMemoDir=安装位置：
+ReadyMemoTasks=选中的选项：
+WizardPreparing=准备安装
+WizardInstalling=正在安装
+StatusCreateDirs=正在创建目录…
+StatusExtractFiles=正在复制程序文件…
+StatusCreateIcons=正在创建快捷方式…
+StatusCreateRegistryEntries=正在保存启动选项…
+StatusSavingUninstall=正在配置卸载程序…
+StatusRunProgram=正在完成安装…
+StatusClosingApplications=正在关闭运行中的应用…
+StatusRollback=正在撤销安装…
+SetupAppRunningError=AudioSwitch 正在运行。%n%n请从托盘退出应用后，再继续安装。
+UninstallAppRunningError=AudioSwitch 正在运行。%n%n请从托盘退出应用后，再继续卸载。
+ExitSetupTitle=取消安装
+ExitSetupMessage=安装尚未完成。确定退出？
 
 [Tasks]
 Name: "startup"; Description: "登录 Windows 后自动启动"; GroupDescription: "启动选项："

@@ -55,6 +55,30 @@ public class WindowCapture {
 } finally {
     if (-not $preview.HasExited) { Stop-Process -Id $preview.Id; $preview.WaitForExit() }
 }
+function Save-Preview($Process, [string]$Name) {
+    for ($attempt = 0; $attempt -lt 20; $attempt++) {
+        Start-Sleep -Milliseconds 500
+        $Process.Refresh()
+        if ($Process.MainWindowHandle -ne 0) { break }
+        if ($Process.HasExited) { throw "$Name exited before its window appeared" }
+    }
+    if ($Process.MainWindowHandle -eq 0) { throw "$Name window did not open" }
+    $rect = New-Object WindowCapture+RECT
+    [void][WindowCapture]::GetWindowRect($Process.MainWindowHandle, [ref]$rect)
+    $image = New-Object System.Drawing.Bitmap(($rect.Right - $rect.Left), ($rect.Bottom - $rect.Top))
+    $canvas = [System.Drawing.Graphics]::FromImage($image)
+    $dc = $canvas.GetHdc()
+    try { $ok = [WindowCapture]::PrintWindow($Process.MainWindowHandle, $dc, 2) }
+    finally { $canvas.ReleaseHdc($dc) }
+    if (-not $ok) { throw "$Name capture failed" }
+    $image.Save((Join-Path $PSScriptRoot "../artifacts/$Name-preview.png"))
+    $canvas.Dispose(); $image.Dispose()
+}
+foreach ($kind in @('update', 'dialog')) {
+    $window = Start-Process $app -ArgumentList "--preview-$kind" -PassThru
+    try { Save-Preview $window $kind }
+    finally { if (-not $window.HasExited) { Stop-Process -Id $window.Id; $window.WaitForExit() } }
+}
 $appProcess = Start-Process $app -ArgumentList '--startup' -PassThru
 try {
     Start-Sleep -Seconds 5
@@ -67,3 +91,19 @@ if ($process.ExitCode -ne 0) { throw "Uninstall failed: $($process.ExitCode)" }
 if ((Get-ItemProperty $run -ErrorAction SilentlyContinue).AudioSwitch) { throw 'Startup command was not removed' }
 if (Test-Path $app) { throw 'Application was not removed' }
 Write-Host 'Install, startup registration, application launch and uninstall smoke checks passed.'
+
+# Inspect the real installer welcome page after uninstall, without completing a second installation.
+$wizard = Start-Process $setup -ArgumentList '/NORESTART', '/LANG=chinese' -PassThru
+$wizardWindow = $null
+try {
+    for ($attempt = 0; $attempt -lt 30; $attempt++) {
+        Start-Sleep -Milliseconds 500
+        $wizardWindow = Get-Process | Where-Object { $_.MainWindowTitle -eq '安装 — AudioSwitch 音频切换' } | Select-Object -First 1
+        if ($wizardWindow) { break }
+    }
+    if (-not $wizardWindow) { throw 'Installer welcome window did not appear' }
+    Save-Preview $wizardWindow 'installer'
+} finally {
+    if ($wizardWindow -and -not $wizardWindow.HasExited) { Stop-Process -Id $wizardWindow.Id }
+    if (-not $wizard.HasExited) { Stop-Process -Id $wizard.Id }
+}

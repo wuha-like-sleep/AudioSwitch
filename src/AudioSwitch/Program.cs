@@ -19,9 +19,9 @@ internal static class Program
             catch (Exception ex) { File.WriteAllText(args[1], ex.ToString()); Environment.ExitCode = 1; }
             return;
         }
-        using var mutex = new Mutex(true, "Local\\AudioSwitch.Tray", out bool first);
-        if (!first) { if (!args.Contains("--startup")) MessageBox.Show("音频切换已在运行，请查看系统托盘。", "音频切换"); return; }
         ApplicationConfiguration.Initialize();
+        using var mutex = new Mutex(true, "Local\\AudioSwitch.Tray", out bool first);
+        if (!first) { if (!args.Contains("--startup")) AppDialog.Show("音频切换已在运行，请查看系统托盘。", "音频切换"); return; }
         if (args.Contains("--preview"))
         {
             using var preview = new SettingsForm(
@@ -29,6 +29,15 @@ internal static class Program
                 new Settings("preview-headphones", "preview-speakers"));
             preview.ShowDialog();
             return;
+        }
+        if (args.Contains("--preview-update"))
+        {
+            using var preview = new UpdateProgressForm(); preview.Report(24 * 1048576, 48 * 1048576);
+            preview.ShowDialog(); return;
+        }
+        if (args.Contains("--preview-dialog"))
+        {
+            AppDialog.Show("当前版本 0.2.1-preview.1 已是最新版本。\n\n更新通道：测试版与正式版", "已经是最新版本"); return;
         }
         using var context = new TrayContext(args.Contains("--startup"));
         Application.Run(context);
@@ -135,7 +144,7 @@ internal sealed class TrayContext : ApplicationContext
         catch (Exception ex)
         {
             string details = $"{operation}失败：{ex.Message}\r\n\r\n错误类型：{ex.GetType().Name}\r\n错误码：0x{ex.HResult:X8}\r\n\r\n按 Ctrl+C 可以复制此提示。";
-            MessageBox.Show(details, "AudioSwitch · " + operation + "失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            AppDialog.Show(details, "AudioSwitch · " + operation + "失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
         }
         finally { configuring = false; }
     }
