@@ -10,7 +10,7 @@
 一个快捷键，在专注与外放之间切换。
 
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-465CE8?logo=windows&logoColor=white)](#安装)
-[![Release](https://img.shields.io/github/v/release/wuha-like-sleep/AudioSwitch?include_prereleases&label=下载&color=465CE8)](https://github.com/wuha-like-sleep/AudioSwitch/releases)
+[![Release](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-v0.2.1--preview.2-465CE8)](https://github.com/wuha-like-sleep/AudioSwitch/releases)
 [![Build](https://github.com/wuha-like-sleep/AudioSwitch/actions/workflows/build.yml/badge.svg)](https://github.com/wuha-like-sleep/AudioSwitch/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/License-MIT-22A77A)](LICENSE)
 
@@ -22,7 +22,7 @@
 
 <br />
 
-![AudioSwitch 设置界面](docs/images/settings.png)
+![AudioSwitch 设置界面](docs/images/settings-0.2.1-preview2.png)
 
 <div align="center"><sub>Windows 实际运行截图 · 展示使用示例设备</sub></div>
 
@@ -33,15 +33,15 @@
 
 **更新下载**
 
-![更新下载界面](docs/images/update.png)
+![更新下载界面](docs/images/update-0.2.1-preview2.png)
 
 **版本检查结果**
 
-![版本提示界面](docs/images/dialog.png)
+![版本提示界面](docs/images/dialog-0.2.1-preview2.png)
 
 **安装向导**
 
-![安装向导](docs/images/installer.png)
+![安装向导](docs/images/installer-0.2.1-preview2.png)
 
 </details>
 
