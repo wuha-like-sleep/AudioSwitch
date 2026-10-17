@@ -2,7 +2,7 @@
 
 ## 构建
 
-需要 Windows、[.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0) 和 [Inno Setup 6.5+](https://jrsoftware.org/isinfo.php)。
+需要 Windows、[.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)、[Inno Setup 6.5+](https://jrsoftware.org/isinfo.php)、CMake 3.24+，以及 Visual Studio 2022 的“使用 C++ 的桌面开发”工具链和对应架构工具（ARM64 包需要 ARM64 编译工具）。`-SkipInstaller` 只构建音频应用，不构建登录实验组件。
 
 ```powershell
 # 构建默认 x64 安装包
@@ -16,7 +16,7 @@
 .\build.ps1 -SkipInstaller
 ```
 
-安装包位于 `artifacts/installer/`。开发构建目录位于 `artifacts/<runtime>/`，不是面向用户的发行包。
+两组安装包位于 `artifacts/installer/`：`AudioSwitch-Setup-*` 为普通音频应用，`AudioSwitch-LoginLab-Setup-*` 为可选原生登录实验组件。开发构建目录位于 `artifacts/<runtime>/`，不是面向用户的发行包。
 更改仓库时通过 `-Repository owner/repo` 指定更新源；程序不需要 GitHub Token。
 项目采用 .NET 8，维护时需在支持周期结束前升级目标框架。
 
@@ -25,7 +25,7 @@
 GitHub Actions 自动构建三种架构的安装包，更新源绑定到实际仓库。
 x64 作业额外验证静默安装、自启动注册、应用运行和卸载清理。
 
-1. 更新 `.csproj` 中的版本号，提交代码。
+1. 同步更新 `.csproj`、两个 Inno 安装器的默认版本、`native/LoginProvider/Version.rc` 和 `NOTICE.txt` 中的版本号，提交代码。
 2. 推送同版本标签，如 `v0.3.0-preview.1`。
 3. 自动构建完成后下载安装包，在 Windows 真机验证。
 4. 创建同版本 GitHub Release（测试版勾选 prerelease），上传三个 `AudioSwitch-Setup-*.exe` 安装包并填写更新说明。
@@ -87,3 +87,7 @@ Credential Provider 负责收集和序列化凭据，最终由 Windows 认证机
 CI 原生测试在不注册时加载 DLL，验证 COM 生命周期、SID 绑定、非微软账户排除、使用场景拒绝、非默认/非自动提交、受保护缓冲区可被 Windows 还原、缓冲区不含测试密码明文、取消/失败清除。隔离 CI 还安装和卸载实验组件，检查 Program Files 路径、自身注册及系统提供程序键保留，加载已安装 DLL 重复测试。测试仅使用虚构账户和测试字符串，不执行真实 LSA 登录、锁屏或退出会话；ARM64 / x86 仅构建，原生运行测试为 x64。
 
 资料：[身份提供程序凭据打包](https://learn.microsoft.com/en-us/windows/win32/api/wincred/nf-wincred-credpackauthenticationbufferw)、[GetUserSid](https://learn.microsoft.com/en-us/windows/win32/api/credentialprovider/nf-credentialprovider-icredentialprovidercredential2-getusersid)、[使用场景](https://learn.microsoft.com/en-us/windows/win32/api/credentialprovider/ne-credentialprovider-credential_provider_usage_scenario)、[伴随设备框架弃用](https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/windows-hello-companion-device-framework)。
+
+此外核查了 [Windows Hello for Business 可信信号解锁](https://learn.microsoft.com/en-us/windows/security/identity-protection/hello-for-business/trusted-signal-unlock)：蓝牙为附加因素，仍需 PIN、指纹或人脸作为第一因素，不能据此宣称个人微软账户可仅靠 iPhone 靠近自动解锁。
+
+0.3.4 发行代码为 `0f7d5b9e6bc8b357a3336aab296abd3431ee367b`；[Windows CI 39023772363](https://github.com/wuha-like-sleep/AudioSwitch/actions/runs/39023772363) 三架构构建成功，x64 原生契约、保护凭据测试副本恢复、密码清除、独立安装注册与卸载检查通过。真实账户认证未执行。
