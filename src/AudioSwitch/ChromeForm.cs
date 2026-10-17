@@ -30,6 +30,16 @@ internal class ChromeForm : Form
         bar.MouseDown += DragWindow; caption.MouseDown += DragWindow; mark.MouseDown += DragWindow;
         Controls.Add(bar);
     }
+    protected override void OnShown(EventArgs e)
+    {
+        var area = Screen.FromControl(this).WorkingArea;
+        int margin = Math.Max(4, (int)Math.Round(8 * DeviceDpi / 96f));
+        var limit = new Size(Math.Max(1, area.Width - margin * 2), Math.Max(1, area.Height - margin * 2));
+        MinimumSize = new Size(Math.Min(MinimumSize.Width, limit.Width), Math.Min(MinimumSize.Height, limit.Height));
+        Size = new Size(Math.Min(Width, limit.Width), Math.Min(Height, limit.Height));
+        Location = new Point(Math.Clamp(Left, area.Left + margin, area.Right - Width - margin), Math.Clamp(Top, area.Top + margin, area.Bottom - Height - margin));
+        base.OnShown(e);
+    }
     protected override void OnTextChanged(EventArgs e)
     {
         if (caption != null) caption.Text = Text;

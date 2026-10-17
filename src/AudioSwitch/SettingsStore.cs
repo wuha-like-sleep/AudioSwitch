@@ -172,8 +172,24 @@ internal static class SettingsStore
         {
             chooser.Show(); chooser.MoveDevice("c", -1);
             if (!chooser.Selection.Select(d => d.Id).SequenceEqual(["a", "c", "b"])) throw new InvalidOperationException("Visual device reordering failed.");
+            chooser.SearchQuery = "HDMI";
+            if (!chooser.VisibleIds.SequenceEqual(["c"])) throw new InvalidOperationException("Device search failed.");
+            chooser.RemoveVisible();
+            if (!chooser.Selection.Select(d => d.Id).SequenceEqual(["a", "b"])) throw new InvalidOperationException("Filtered removal changed other selections.");
+            chooser.AddVisibleOnline();
+            if (!chooser.Selection.Select(d => d.Id).SequenceEqual(["a", "b", "c"])) throw new InvalidOperationException("Adding filtered online devices lost existing order.");
+            chooser.SearchQuery = "not-a-device";
+            chooser.RemoveVisible(); chooser.AddVisibleOnline();
+            if (chooser.Selection.Count != 3 || chooser.VisibleIds.Count != 0) throw new InvalidOperationException("Empty search results changed device selection.");
             chooser.Close();
         }
+        if (SignalCalibration.Recommend([-60, -61, -59, -110, -60]) != -75)
+            throw new InvalidOperationException("Median signal calibration did not reject an outlier.");
+        bool rejectedCalibration = false;
+        try { SignalCalibration.Recommend([-60, -61]); } catch (InvalidOperationException) { rejectedCalibration = true; }
+        if (!rejectedCalibration) throw new InvalidOperationException("Calibration accepted too few samples.");
+        var legacyProximity = JsonSerializer.Deserialize<ProximitySettings>("""{"Enabled":false,"PhoneId":"phone","SignalThreshold":-75}""");
+        if (legacyProximity?.SignalHysteresis != 5) throw new InvalidOperationException("Older signal settings lost their default recovery buffer.");
         VerifyProximity();
         using (var testForm = new ProximityForm(new(false, "test-phone"), () => [new("test-phone", "Phone", true, -60, DateTimeOffset.UtcNow)], () => null))
         {
@@ -206,7 +222,11 @@ internal static class SettingsStore
         guard.Evaluate(config, disconnected, now.AddSeconds(6));
         if (!guard.Evaluate(config, disconnected, now.AddSeconds(21)).ShouldLock || guard.Evaluate(config, disconnected, now.AddSeconds(22)).ShouldLock)
             throw new InvalidOperationException("Disconnect lock or one-shot behavior failed.");
-        guard.Reset(); config = config with { Mode = "signal" };
+        guard.Reset(); config = config with { Mode = "signal", SignalHysteresis = 10 };
+        var buffered = connected with { Signal = -66 };
+        if (guard.Evaluate(config, buffered, now).Healthy) throw new InvalidOperationException("Custom signal recovery buffer was ignored.");
+        if (!guard.Evaluate(config, connected, now).Healthy) throw new InvalidOperationException("Strong signal failed custom recovery buffer.");
+        guard.Reset(); config = config with { SignalHysteresis = 5 };
         guard.Evaluate(config, connected, now);
         var weak = connected with { Signal = -85, SignalAt = now.AddSeconds(1) };
         guard.Evaluate(config, weak, now.AddSeconds(1));

@@ -1,6 +1,6 @@
 namespace AudioSwitch;
 
-internal sealed record ProximitySettings(bool Enabled = false, string PhoneId = "", string Mode = "disconnect", int DelaySeconds = 30, int SignalThreshold = -75);
+internal sealed record ProximitySettings(bool Enabled = false, string PhoneId = "", string Mode = "disconnect", int DelaySeconds = 30, int SignalThreshold = -75, int SignalHysteresis = 5);
 internal sealed record PhoneSnapshot(string Id, string Name, bool? Connected, int? Signal, DateTimeOffset? SignalAt);
 internal sealed record ProximityState(string Message, bool ShouldLock = false, int? Remaining = null, bool Healthy = false);
 
@@ -16,8 +16,9 @@ internal sealed class ProximityGuard
         bool fresh = phone.SignalAt is { } seen && now >= seen && now - seen <= TimeSpan.FromSeconds(20) && phone.Signal is >= -127 and < 0;
         bool signalMode = settings.Mode == "signal", combined = settings.Mode == "either";
         if (signalMode && !fresh) { awaySince = null; return new("没有实时信号，暂停信号锁屏"); }
-        bool healthy = signalMode ? fresh && phone.Signal > settings.SignalThreshold + 5 : phone.Connected == true;
-        if (healthy && (!combined || !fresh || phone.Signal > settings.SignalThreshold + 5))
+        int recoveryThreshold = settings.SignalThreshold + Math.Clamp(settings.SignalHysteresis, 1, 20);
+        bool healthy = signalMode ? fresh && phone.Signal > recoveryThreshold : phone.Connected == true;
+        if (healthy && (!combined || !fresh || phone.Signal > recoveryThreshold))
         { armed = true; awaySince = null; return new("手机在附近，监测中", Healthy: true); }
         if (!armed) return new("等待手机连接或靠近，尚未启用锁屏判定");
         bool away = (settings.Mode != "signal" && phone.Connected == false) || ((signalMode || combined) && fresh && phone.Signal <= settings.SignalThreshold);
