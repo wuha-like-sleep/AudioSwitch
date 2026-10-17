@@ -39,6 +39,11 @@ internal sealed class AppDialog : ChromeForm
         using var dialog = new AppDialog(text, title, MessageBoxButtons.OK, MessageBoxIcon.Information);
         return dialog.ShowDialog(owner);
     }
+    public static bool ConfirmAction(IWin32Window owner, string title, string text, string accept)
+    {
+        using var dialog = new AppDialog(text, title, MessageBoxButtons.YesNo, MessageBoxIcon.Question, accept, "取消", true);
+        return dialog.ShowDialog(owner) == DialogResult.Yes;
+    }
     public static bool ConfirmDiscard(IWin32Window owner)
     {
         using var dialog = new AppDialog("你修改了设置，但还没有保存。\n\n关闭后将保留原来的设置，刚才的修改会被放弃。", "有未保存的修改", MessageBoxButtons.YesNo, MessageBoxIcon.Question, "放弃修改", "继续编辑", true);

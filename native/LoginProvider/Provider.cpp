@@ -10,6 +10,7 @@
 #include <array>
 #include <new>
 #include "ProviderId.h"
+#include "BridgeClient.h"
 using Microsoft::WRL::ComPtr;
 namespace {
 LONG objects = 0, locks = 0;
@@ -83,7 +84,7 @@ public:
         if (!text) return E_POINTER; *text = nullptr;
         switch (id) {
         case 0: return CopyText(L"AudioSwitch 登录实验", text);
-        case 1: return CopyText(L"微软账户密码测试；不支持 PIN，也未启用手机自动解锁。", text);
+        case 1: return CopyText(L"账户密码提交；已绑定时需现场验证手机。尚未启用自动解锁。", text);
         case 2: return CopyText(password.text ? password.text : L"", text);
         case 3: return CopyText(L"登录", text);
         default: return E_INVALIDARG;
@@ -107,6 +108,10 @@ public:
         if (!response || !serialized || !status || !icon) return E_POINTER;
         *response = CPGSR_NO_CREDENTIAL_NOT_FINISHED; *serialized = {}; *status = nullptr; *icon = CPSI_NONE;
         if (!password.text || !*password.text) { *icon = CPSI_WARNING; return CopyText(L"请输入微软账户密码；请勿输入 PIN。", status); }
+        if (!VerifyBoundPhone(sid)) {
+            SetDeselected(); *icon = CPSI_WARNING;
+            return CopyText(L"未取得绑定手机的新鲜认证结果，已停止提交并清除密码。请检查手机和 AudioSwitch 登录桥接服务，或切回系统 PIN / Windows Hello。", status);
+        }
         ULONG package = 0;
         auto hr = NegotiatePackage(&package);
         if (FAILED(hr)) { SetDeselected(); return hr; }

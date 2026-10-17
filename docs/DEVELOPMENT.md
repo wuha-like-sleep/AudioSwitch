@@ -91,3 +91,20 @@ CI 原生测试在不注册时加载 DLL，验证 COM 生命周期、SID 绑定�
 此外核查了 [Windows Hello for Business 可信信号解锁](https://learn.microsoft.com/en-us/windows/security/identity-protection/hello-for-business/trusted-signal-unlock)：蓝牙为附加因素，仍需 PIN、指纹或人脸作为第一因素，不能据此宣称个人微软账户可仅靠 iPhone 靠近自动解锁。
 
 0.3.4 发行代码为 `0f7d5b9e6bc8b357a3336aab296abd3431ee367b`；[Windows CI 39023772363](https://github.com/wuha-like-sleep/AudioSwitch/actions/runs/39023772363) 三架构构建成功，x64 原生契约、保护凭据测试副本恢复、密码清除、独立安装注册与卸载检查通过。真实账户认证未执行。
+
+
+### 0.3.5：手机认证 → 系统服务 → 登录组件
+
+新增 `AudioSwitch.LoginBridge.exe` LocalSystem 服务，独立实验安装器负责停止旧服务、安装/启动、卸载服务和删除自身绑定。普通音频安装器不安装服务。应用从所选经典蓝牙端点读取地址，本机管理员工具确认已经配对后，将绑定写入受保护的 HKLM 账户 SID 子键。绑定和解除即时生效，独立于普通音频配置保存，不保存密码。
+
+已绑定时，Credential Provider 在序列化密码前请求服务；服务只接受原生系统目录中的 LogonUI.exe、LocalSystem 身份、对应会话和该会话真实用户 SID，并要求会话已锁定。服务通过蓝牙套接字对绑定地址的 HFP 网关服务发起现场连接，强制 `SO_BTH_AUTHENTICATE` 和 `SO_BTH_ENCRYPT`，检查实际对端地址，无普通连接降级、无配对向导、不发送通话命令。连接最多等待约 8 秒。会话事件改变、绑定撤销或手机验证失败均拒绝返回可用结果。经典蓝牙 API 仅支持查询 MTU 选项，本实现依赖强制设置认证/加密后的连接成功语义，不假称读回了保护级别；真实 iPhone 和 LocalSystem 蓝牙兼容性尚未验证。
+
+IPC 为固定版本命名管道，仅本机 SYSTEM/管理员可连接，拒绝远程客户端。客户端以识别级别连接，核对管道服务端 PID 与 SCM 中实际运行服务的 PID；不信任同名假服务。每次请求生成 32 字节随机 nonce，结果对应 nonce、会话、绑定手机，完成时间最多 2 秒，未来时间拒绝。每次密码提交均新建请求，无成功状态缓存或持久化“手机通过”文件，管道中不传递账户密码或序列化凭据。读取、写入及等待均有超时，关闭服务取消挂起操作。
+
+未绑定保留原来的手动密码实验；已绑定但配置损坏、服务停止、身份不符、手机不可用时停止提交并清除密码，不自动退回无手机的实验登录。系统 PIN / Hello 入口仍保留，不新增 Credential Provider Filter。解除绑定恢复手动密码实验模式。绑定模式不适用于开机首次登录、其他用户或组织/本地账户。
+
+本版接通的是“手机通道验证作为手动密码提交门槛”。**仍未完成无确认自动解锁。** 尚无密码初始化、持久凭据存储和自动提交，真实微软账户/锁定会话/真实 iPhone 未验证。链路级认证不代表人在场、不提供距离绑定，不解决蓝牙中继风险。Hello 仍由系统直接处理，本组件不绕过用户确认来调用 Hello。
+
+CI 验证服务安装、启动、停止、删除；构造管理员测试绑定，确保普通测试进程不是 LogonUI 时拿不到允许提交的结果，服务不存在时拒绝。协议测试覆盖正确结果、错误 nonce/手机/会话/版本、过期和未来时间。保护密码序列化等原有检查继续保留。正向蓝牙验证和真实登录不在 CI 测试范围；不能把这些失败路径测试写成端到端自动解锁通过。
+
+资料：[蓝牙套接字选项](https://learn.microsoft.com/en-us/windows/win32/bluetooth/bluetooth-and-socket-options)、[管道客户端进程](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeclientprocessid)、[管道服务端进程](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeserverprocessid)、[用户会话令牌](https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/nf-wtsapi32-wtsqueryusertoken)。

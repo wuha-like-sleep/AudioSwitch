@@ -11,6 +11,7 @@
 #include <stdexcept>
 #include <algorithm>
 #include "ProviderId.h"
+#include "BridgeProtocol.h"
 using Microsoft::WRL::ComPtr;
 void Check(bool value, const char* message) { if (!value) throw std::runtime_error(message); }
 class User final : public ICredentialProviderUser {
@@ -40,7 +41,7 @@ public:
     IFACEMETHODIMP GetCount(DWORD* value) override { *value = 2; return S_OK; }
     IFACEMETHODIMP GetAt(DWORD index, ICredentialProviderUser** value) override { if (index > 1) return E_INVALIDARG; *value = new User(index == 0); return S_OK; }
 };
-void Verify(IClassFactory* factory) {
+void Verify(IClassFactory* factory, bool denyBound) {
     ComPtr<ICredentialProvider> provider;
     Check(SUCCEEDED(factory->CreateInstance(nullptr, IID_PPV_ARGS(&provider))), "Create provider");
     Check(provider->SetUsageScenario(CPUS_CREDUI, 0) == E_NOTIMPL, "Reject unrelated CredUI");
@@ -72,6 +73,12 @@ void Verify(IClassFactory* factory) {
         constexpr wchar_t testPassword[] = L"test-only-not-a-real-password-739!";
         Check(SUCCEEDED(credential->SetStringValue(2, testPassword)), "Test password set");
         Check(SUCCEEDED(credential->GetSerialization(&response, &serialization, &status, &icon)), "Serialize identity-provider credential");
+        if (denyBound) {
+            Check(response == CPGSR_NO_CREDENTIAL_NOT_FINISHED && !serialization.rgbSerialization && status && icon == CPSI_WARNING, "Bound phone without valid broker proof cannot serialize");
+            CoTaskMemFree(status);
+            PWSTR cleared = nullptr; credential->GetStringValue(2, &cleared); Check(cleared && !*cleared, "Rejected bridge clears password"); CoTaskMemFree(cleared);
+            continue;
+        }
         Check(response == CPGSR_RETURN_CREDENTIAL_FINISHED && serialization.rgbSerialization && serialization.cbSerialization && serialization.clsidCredentialProvider == AudioSwitchLoginProviderId, "Serialized metadata");
         auto start = reinterpret_cast<const BYTE*>(testPassword);
         auto end = start + sizeof(testPassword) - sizeof(wchar_t);
@@ -107,7 +114,8 @@ void Verify(IClassFactory* factory) {
     }
 }
 int wmain(int argc, wchar_t** argv) {
-    if (argc != 2) return 2;
+    if (argc != 2 && argc != 3) return 2;
+    const bool denyBound = argc == 3 && wcscmp(argv[2], L"--deny-bound") == 0;
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     auto library = LoadLibraryW(argv[1]); if (!library) return 3;
     using GetFactory = HRESULT(__stdcall*)(REFCLSID, REFIID, void**);
@@ -120,9 +128,19 @@ int wmain(int argc, wchar_t** argv) {
         {
             ComPtr<IClassFactory> factory; Check(SUCCEEDED(getFactory(AudioSwitchLoginProviderId, IID_PPV_ARGS(&factory))), "Class factory");
             Check(canUnload() == S_FALSE, "Live object prevents unload");
-            Verify(factory.Get());
+            Verify(factory.Get(), denyBound);
         }
         Check(canUnload() == S_OK, "No leaked COM objects");
+        Bridge::Request request; request.session = 2; request.nonce[0] = 1; wcscpy_s(request.sid, L"S-1-5-21-100-200-300-1001");
+        Bridge::Response reply; reply.result = Bridge::Result::Verified; reply.session = request.session; reply.phone = 0x123456789ABC; reply.completed = 10000; memcpy(reply.nonce, request.nonce, sizeof(reply.nonce));
+        Check(Bridge::ValidResponse(request, reply, reply.phone, 11000), "Fresh proof accepted");
+        Check(!Bridge::ValidResponse(request, reply, reply.phone, 12001), "Expired proof rejected");
+        Check(!Bridge::ValidResponse(request, reply, reply.phone, 9999), "Future proof rejected");
+        Check(!Bridge::ValidResponse(request, reply, reply.phone + 1, 11000), "Different phone rejected");
+        reply.nonce[0] ^= 1; Check(!Bridge::ValidResponse(request, reply, reply.phone, 11000), "Old request nonce rejected"); reply.nonce[0] ^= 1;
+        reply.session++; Check(!Bridge::ValidResponse(request, reply, reply.phone, 11000), "Other session rejected"); reply.session--;
+        reply.version++; Check(!Bridge::ValidResponse(request, reply, reply.phone, 11000), "Unknown protocol rejected");
+        if (denyBound) std::cout << "Bound-phone gate rejected a non-LogonUI or missing broker, with no credential serialization.\n";
         std::cout << "Login provider COM, MSA/SID binding, protected serialization, password clearing and system fallback checks passed. No real account authentication performed.\n";
     } catch (const std::exception& error) { std::cerr << error.what() << " (Win32 " << GetLastError() << ")\n"; result = 1; }
     FreeLibrary(library); CoUninitialize(); return result;

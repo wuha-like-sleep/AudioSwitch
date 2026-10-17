@@ -26,7 +26,7 @@ internal sealed class UnlockProbeForm : ChromeForm
         var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false };
         var close = Button("关闭", false); close.Click += (_, _) => Close();
         var start = Button("开始检测", true); start.Enabled = phoneId.Length > 0;
-        var login = Button("登录组件", false); login.Click += (_, _) => { using var form = new LoginComponentForm(); form.ShowDialog(this); };
+        var login = Button("登录组件", false); login.Click += (_, _) => { using var form = new LoginComponentForm(phoneId); form.ShowDialog(this); };
         var copy = Button("复制结果", false); copy.Click += (_, _) => Clipboard.SetText(summary.Text + Environment.NewLine + report.Text);
         start.Click += async (_, _) =>
         {

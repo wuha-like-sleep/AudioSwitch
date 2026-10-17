@@ -2,7 +2,7 @@
   #define Runtime "win-x64"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.3.4"
+  #define AppVersion "0.3.5"
 #endif
 #ifndef SourceDir
   #define SourceDir "..\artifacts\login-" + Runtime + "\Release"
@@ -48,6 +48,7 @@ CloseApplications=no
 RestartApplications=no
 [Files]
 Source: "{#SourceDir}\AudioSwitch.LoginProvider.dll"; DestDir: "{app}"; Flags: ignoreversion uninsrestartdelete
+Source: "{#SourceDir}\AudioSwitch.LoginBridge.exe"; DestDir: "{app}"; Flags: ignoreversion uninsrestartdelete
 Source: "..\src\AudioSwitch\Assets\app.ico"; DestDir: "{app}"
 Source: "..\native\LoginProvider\NOTICE.txt"; DestDir: "{app}"
 Source: "..\LICENSE"; DestDir: "{app}"
@@ -56,3 +57,30 @@ Root: {#RegistryRoot}; Subkey: "Software\Classes\CLSID\{#ProviderId}"; ValueType
 Root: {#RegistryRoot}; Subkey: "Software\Classes\CLSID\{#ProviderId}\InprocServer32"; ValueType: string; ValueData: "{app}\AudioSwitch.LoginProvider.dll"
 Root: {#RegistryRoot}; Subkey: "Software\Classes\CLSID\{#ProviderId}\InprocServer32"; ValueType: string; ValueName: "ThreadingModel"; ValueData: "Apartment"
 Root: {#RegistryRoot}; Subkey: "Software\Microsoft\Windows\CurrentVersion\Authentication\Credential Providers\{#ProviderId}"; ValueType: string; ValueData: "AudioSwitch Login Lab"; Flags: uninsdeletekey
+
+Root: {#RegistryRoot}; Subkey: "Software\AudioSwitch\LoginBridge"; Flags: uninsdeletekey
+
+[Code]
+function BridgeCommand(Path, Args: String): Boolean;
+var Code: Integer;
+begin
+  Result := Exec(Path, Args, '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
+end;
+function PrepareToInstall(var NeedsRestart: Boolean): String;
+var Path: String;
+begin
+  Result := '';
+  Path := ExpandConstant('{app}\AudioSwitch.LoginBridge.exe');
+  if FileExists(Path) and not BridgeCommand(Path, '--stop-service') then
+    Result := '无法停止 AudioSwitch 登录桥接服务。请重启后重试。';
+end;
+procedure CurStepChanged(Step: TSetupStep);
+begin
+  if (Step = ssPostInstall) and not BridgeCommand(ExpandConstant('{app}\AudioSwitch.LoginBridge.exe'), '--install-service') then
+    RaiseException('无法安装或启动 AudioSwitch 登录桥接服务。');
+end;
+procedure CurUninstallStepChanged(Step: TUninstallStep);
+begin
+  if (Step = usUninstall) and not BridgeCommand(ExpandConstant('{app}\AudioSwitch.LoginBridge.exe'), '--remove-service') then
+    RaiseException('无法移除 AudioSwitch 登录桥接服务。请重启后重试卸载。');
+end;
