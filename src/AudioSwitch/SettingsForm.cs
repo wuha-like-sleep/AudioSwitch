@@ -93,7 +93,7 @@ internal sealed class SettingsForm : Form
         layout.Controls.Add(new Label { Text = subtitle, BackColor = Color.White, ForeColor = Muted, AutoSize = true }, 0, 1);
         layout.Controls.Add(picker, 0, 2); card.Controls.Add(layout); return card;
     }
-    private static Button ActionButton(string text, bool primary)
+    private static ThemeButton ActionButton(string text, bool primary)
     {
         return new ThemeButton { Text = text, Primary = primary, Size = new Size(132, 46), Font = new Font("Microsoft YaHei UI", 10, primary ? FontStyle.Bold : FontStyle.Regular), Margin = new Padding(12, 8, 0, 0) };
     }

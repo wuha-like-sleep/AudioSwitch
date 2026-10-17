@@ -37,5 +37,5 @@ jobs:
         if: matrix.runtime == 'win-x64'
         with:
           name: Settings-preview
-          path: artifacts/settings-preview.png
+          path: artifacts/settings*preview.png
           if-no-files-found: error

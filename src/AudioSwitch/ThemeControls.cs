@@ -36,14 +36,28 @@ internal sealed class RoundedPanel : Panel
         base.OnPaint(e);
     }
 }
-internal sealed class ThemeButton : Button
+internal sealed class ThemeButton : Control, IButtonControl
 {
     public bool Primary { get; init; }
+    public DialogResult DialogResult { get; set; }
+    public void NotifyDefault(bool value) => Invalidate();
+    public void PerformClick() { if (Enabled) OnClick(EventArgs.Empty); }
+    protected override void OnClick(EventArgs e)
+    {
+        base.OnClick(e);
+        if (DialogResult != DialogResult.None && FindForm() is { } form) form.DialogResult = DialogResult;
+    }
+    protected override void OnMouseDown(MouseEventArgs e) { Focus(); base.OnMouseDown(e); }
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (e.KeyCode is Keys.Space or Keys.Enter) { PerformClick(); e.Handled = true; e.SuppressKeyPress = true; }
+        base.OnKeyDown(e);
+    }
     private bool hover;
     public ThemeButton()
     {
         SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.SupportsTransparentBackColor, true);
-        FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0; BackColor = Color.Transparent;
+        TabStop = true; AccessibleRole = AccessibleRole.PushButton; BackColor = Color.Transparent;
         Cursor = Cursors.Hand;
     }
     protected override void OnPaintBackground(PaintEventArgs e) => e.Graphics.Clear(Color.FromArgb(243, 246, 251));
@@ -62,11 +76,27 @@ internal sealed class ThemeButton : Button
         if (Focused) ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(ClientRectangle, -6, -6));
     }
 }
-internal sealed class Toggle : CheckBox
+internal sealed class Toggle : Control
 {
-    public Toggle() { AutoSize = false; Size = new Size(285, 32); Cursor = Cursors.Hand; SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true); }
+    private bool isChecked;
+    public bool Checked { get => isChecked; set { isChecked = value; Invalidate(); } }
+    public Toggle() { TabStop = true; AccessibleRole = AccessibleRole.CheckButton; AutoSize = false; Size = new Size(285, 32); Cursor = Cursors.Hand; SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true); }
     protected override void OnPaintBackground(PaintEventArgs e) => e.Graphics.Clear(Color.White);
-    protected override void OnCheckedChanged(EventArgs e) { Invalidate(); base.OnCheckedChanged(e); }
+    protected override void OnClick(EventArgs e) { Focus(); Checked = !Checked; base.OnClick(e); }
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if (e.KeyCode == Keys.Space) { Checked = !Checked; e.Handled = true; e.SuppressKeyPress = true; }
+        base.OnKeyDown(e);
+    }
+    protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
+    protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }
+    protected override AccessibleObject CreateAccessibilityInstance() => new ToggleAccessibility(this);
+    private sealed class ToggleAccessibility(Toggle owner) : ControlAccessibleObject(owner)
+    {
+        public override AccessibleStates State => base.State | (owner.Checked ? AccessibleStates.Checked : AccessibleStates.None);
+        public override string DefaultAction => "切换";
+        public override void DoDefaultAction() => owner.OnClick(EventArgs.Empty);
+    }
     protected override void OnPaint(PaintEventArgs e)
     {
         e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;

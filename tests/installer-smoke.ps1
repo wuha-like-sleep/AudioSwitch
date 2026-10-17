@@ -38,6 +38,8 @@ public class WindowCapture {
     finally { $graphics.ReleaseHdc($dc) }
     if (-not $captured) { throw 'Settings screenshot capture failed' }
     $bitmap.Save((Join-Path $PSScriptRoot '../artifacts/settings-preview.png'))
+    $graphics.CopyFromScreen($rect.Left, $rect.Top, 0, 0, $bitmap.Size)
+    $bitmap.Save((Join-Path $PSScriptRoot '../artifacts/settings-screen-preview.png'))
     $graphics.Dispose(); $bitmap.Dispose()
 } finally {
     if (-not $preview.HasExited) { Stop-Process -Id $preview.Id; $preview.WaitForExit() }
