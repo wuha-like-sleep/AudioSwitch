@@ -14,6 +14,9 @@ try {
     $process = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
     if ($process.ExitCode -ne 0) { throw "Lab installer exit $($process.ExitCode)" }
     if (!(Test-Path "$providers\$guid") -or !(Test-Path "$classes\InprocServer32")) { throw 'Lab provider registration missing' }
+    # Reinstall exercises stopping/replacing/restarting an existing service.
+    $upgrade = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
+    if ($upgrade.ExitCode -ne 0) { throw "Lab upgrade exit $($upgrade.ExitCode)" }
     $service = Get-Service -Name 'AudioSwitchLoginBridge'
     if ($service.Status -ne 'Running') { throw 'Login bridge did not start' }
     $registered = (Get-Item "$classes\InprocServer32").GetValue('')
@@ -26,6 +29,8 @@ try {
     $binding = 'HKLM:\SOFTWARE\AudioSwitch\LoginBridge\Bindings\S-1-5-21-100-200-300-1001'
     try {
         New-Item $binding -Force | Out-Null
+        & $test $registered '--deny-bound'
+        if ($LASTEXITCODE -ne 0) { throw 'Missing phone value bypassed the phone gate' }
         Set-ItemProperty $binding -Name Phone -Value '123456789ABC'
         & $test $registered '--deny-bound'
         if ($LASTEXITCODE -ne 0) { throw 'Broker allowed a non-LogonUI caller' }

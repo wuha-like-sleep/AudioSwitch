@@ -22,10 +22,14 @@ inline bool ReadBinding(PCWSTR sid, uint64_t* phone) {
     *phone = 0;
     if (!sid || wcslen(sid) > 183 || wcsncmp(sid, L"S-1-", 4) != 0 || wcspbrk(sid, L"\\/")) return false;
     wchar_t path[256]{}; if (swprintf_s(path, L"%s%s", BindingRoot, sid) < 0) return false;
+    HKEY key = nullptr;
+    const auto opened = RegOpenKeyExW(HKEY_LOCAL_MACHINE, path, 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &key);
+    if (opened == ERROR_FILE_NOT_FOUND || opened == ERROR_PATH_NOT_FOUND) return false;
+    if (opened != ERROR_SUCCESS) return true;
     wchar_t address[13]{}; DWORD bytes = sizeof(address), type = 0;
-    const auto error = RegGetValueW(HKEY_LOCAL_MACHINE, path, L"Phone", RRF_RT_REG_SZ | RRF_SUBKEY_WOW6464KEY, &type, address, &bytes);
-    if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND) return false;
-    // Any inaccessible/malformed binding is still enabled and must fail closed.
+    const auto error = RegGetValueW(key, nullptr, L"Phone", RRF_RT_REG_SZ, &type, address, &bytes);
+    RegCloseKey(key);
+    // An existing but inaccessible/malformed binding remains enabled and fails closed.
     if (error != ERROR_SUCCESS || bytes != sizeof(address) || address[12]) return true;
     uint64_t parsed = 0;
     for (size_t index = 0; index < 12; ++index) {

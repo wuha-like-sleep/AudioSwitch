@@ -128,6 +128,7 @@ void WINAPI ServiceMain(DWORD, PWSTR*) {
 }
 int ManageService(PCWSTR operation) {
     if (!IsUserAnAdmin()) return ERROR_ELEVATION_REQUIRED;
+    if (wcscmp(operation, L"--install-service") == 0) { const auto stopped = ManageService(L"--stop-service"); if (stopped != ERROR_SUCCESS) return stopped; }
     auto manager = OpenSCManagerW(nullptr, nullptr, SC_MANAGER_CONNECT | SC_MANAGER_CREATE_SERVICE); if (!manager) return static_cast<int>(GetLastError());
     auto service = OpenServiceW(manager, Bridge::ServiceName, SERVICE_QUERY_STATUS | SERVICE_START | SERVICE_STOP | SERVICE_CHANGE_CONFIG | DELETE);
     DWORD error = ERROR_SUCCESS;
@@ -138,6 +139,15 @@ int ManageService(PCWSTR operation) {
         else if (!error && !ChangeServiceConfigW(service, SERVICE_WIN32_OWN_PROCESS, SERVICE_AUTO_START, SERVICE_ERROR_NORMAL, command, nullptr, nullptr, nullptr, L"LocalSystem", nullptr, L"AudioSwitch 登录桥接")) error = GetLastError();
         if (!service && !error) error = GetLastError();
         if (service && !error && !StartServiceW(service, 0, nullptr)) { error = GetLastError(); if (error == ERROR_SERVICE_ALREADY_RUNNING) error = ERROR_SUCCESS; }
+        if (service && !error) {
+            SERVICE_STATUS_PROCESS status{}; DWORD bytes = 0; const auto deadline = GetTickCount64() + 10000;
+            while (!error) {
+                if (!QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO, reinterpret_cast<BYTE*>(&status), sizeof(status), &bytes)) { error = GetLastError(); break; }
+                if (status.dwCurrentState == SERVICE_RUNNING) break;
+                if (status.dwCurrentState == SERVICE_STOPPED || GetTickCount64() >= deadline) { error = ERROR_SERVICE_NOT_ACTIVE; break; }
+                Sleep(50);
+            }
+        }
     } else if (service) {
         SERVICE_STATUS_PROCESS status{}; DWORD bytes = 0;
         if (!QueryServiceStatusEx(service, SC_STATUS_PROCESS_INFO, reinterpret_cast<BYTE*>(&status), sizeof(status), &bytes)) error = GetLastError();
