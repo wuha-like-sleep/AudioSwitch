@@ -8,7 +8,7 @@ internal sealed class ProximityForm : ChromeForm
     private readonly NumericUpDown threshold = new() { Minimum = -120, Maximum = -20, Value = -75, Dock = DockStyle.Fill, BorderStyle = BorderStyle.FixedSingle, AccessibleName = "弱信号阈值", BackColor = Color.FromArgb(244, 246, 252) };
     private readonly NumericUpDown hysteresis = new() { Minimum = 1, Maximum = 20, Value = 5, Dock = DockStyle.Fill, BorderStyle = BorderStyle.FixedSingle, AccessibleName = "恢复缓冲", BackColor = Color.FromArgb(244, 246, 252) };
     private readonly RoundedPanel statusCard = new() { Dock = DockStyle.Fill, Padding = new Padding(12), Margin = new Padding(0, 8, 0, 8) };
-    private readonly Queue<int> readings = new();
+    private readonly Queue<(int Value, DateTimeOffset At)> readings = new();
     private DateTimeOffset? lastReading;
     private readonly Toggle enabled = new() { Text = "启用手机离开锁屏", Dock = DockStyle.Fill };
     private readonly Label status = new() { Dock = DockStyle.Fill, ForeColor = Theme.Muted, AutoEllipsis = true };
@@ -41,7 +41,11 @@ internal sealed class ProximityForm : ChromeForm
         var calibrate = new ThemeButton { Text = "参考标定", Dock = DockStyle.Fill, Margin = new Padding(8, 0, 0, 0) };
         calibrate.Click += (_, _) =>
         {
-            try { threshold.Value = SignalCalibration.Recommend(readings); }
+            try
+            {
+                if (lastReading == null || DateTimeOffset.UtcNow < lastReading.Value || DateTimeOffset.UtcNow - lastReading.Value > TimeSpan.FromSeconds(20)) throw new InvalidOperationException("当前没有实时信号，请等待手机更新信号后再标定。");
+                threshold.Value = SignalCalibration.Recommend(readings.Select(r => r.Value));
+            }
             catch (InvalidOperationException ex) { AppDialog.Show(this, ex.Message, "参考标定"); }
         };
         signalRow.Controls.Add(threshold, 0, 0); signalRow.Controls.Add(calibrate, 1, 0);
@@ -105,9 +109,9 @@ internal sealed class ProximityForm : ChromeForm
         bool fresh = selected?.SignalAt is { } seen && DateTimeOffset.UtcNow >= seen && DateTimeOffset.UtcNow - seen <= TimeSpan.FromSeconds(20) && selected.Signal is >= -127 and < 0;
         if (fresh && selected!.SignalAt != lastReading)
         {
-            readings.Enqueue(selected.Signal!.Value); lastReading = selected.SignalAt;
-            while (readings.Count > 9) readings.Dequeue();
+            readings.Enqueue((selected.Signal!.Value, selected.SignalAt!.Value)); lastReading = selected.SignalAt;
         }
+        while (readings.Count > 0 && (readings.Count > 9 || DateTimeOffset.UtcNow - readings.Peek().At > TimeSpan.FromSeconds(30))) readings.Dequeue();
         status.Text = selected == null ? "等待选择手机。若列表为空，请先配对手机，再点击刷新。" :
             $"连接：{(selected.Connected == true ? "已连接" : selected.Connected == false ? "已断开" : "未知")} · 实时信号：{(fresh ? selected.Signal!.Value.ToString() : "暂无可用值")}";
         status.Text += $"\n弱信号 ≤ {threshold.Value:0} · 恢复需 > {threshold.Value + hysteresis.Value:0} · 已采集 {readings.Count} 次";
