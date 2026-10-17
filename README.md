@@ -10,7 +10,7 @@
 一个快捷键，在专注与外放之间切换。
 
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-465CE8?logo=windows&logoColor=white)](#安装)
-[![Release](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-v0.2.2--preview.1-465CE8)](https://github.com/wuha-like-sleep/AudioSwitch/releases)
+[![Release](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-v0.2.2--preview.2-465CE8)](https://github.com/wuha-like-sleep/AudioSwitch/releases)
 [![Build](https://github.com/wuha-like-sleep/AudioSwitch/actions/workflows/build.yml/badge.svg)](https://github.com/wuha-like-sleep/AudioSwitch/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/License-MIT-22A77A)](LICENSE)
 
@@ -22,7 +22,7 @@
 
 <br />
 
-![AudioSwitch 设置界面](docs/images/settings-0.2.2-preview1.png)
+![AudioSwitch 设置界面](docs/images/settings-0.2.2-preview2.png)
 
 <div align="center"><sub>Windows 实际运行截图 · 展示使用示例设备</sub></div>
 
@@ -33,19 +33,19 @@
 
 **更新下载**
 
-![更新下载界面](docs/images/update-0.2.2-preview1.png)
+![更新下载界面](docs/images/update-0.2.2-preview2.png)
 
 **版本检查结果**
 
-![版本提示界面](docs/images/dialog-0.2.2-preview1.png)
+![版本提示界面](docs/images/dialog-0.2.2-preview2.png)
 
 **切换提示**
 
-![切换提示](docs/images/toast-0.2.2-preview1.png)
+![切换提示](docs/images/toast-0.2.2-preview2.png)
 
 **安装向导**
 
-![安装向导](docs/images/installer-0.2.2-preview1.png)
+![安装向导](docs/images/installer-0.2.2-preview2.png)
 
 </details>
 
@@ -63,9 +63,9 @@
 
 | 你的电脑 | 下载 |
 | :--- | :--- |
-| Intel / AMD 64 位电脑 · 大多数用户选择此项 | **[Windows x64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.2.2-preview.1/AudioSwitch-Setup-win-x64.exe)** |
-| Windows ARM64 电脑 | [Windows ARM64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.2.2-preview.1/AudioSwitch-Setup-win-arm64.exe) |
-| Windows 10 32 位电脑 | [Windows x86](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.2.2-preview.1/AudioSwitch-Setup-win-x86.exe) |
+| Intel / AMD 64 位电脑 · 大多数用户选择此项 | **[Windows x64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.2.2-preview.2/AudioSwitch-Setup-win-x64.exe)** |
+| Windows ARM64 电脑 | [Windows ARM64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.2.2-preview.2/AudioSwitch-Setup-win-arm64.exe) |
+| Windows 10 32 位电脑 | [Windows x86](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.2.2-preview.2/AudioSwitch-Setup-win-x86.exe) |
 
 运行安装向导，选择安装位置、自启动和桌面快捷方式。程序默认安装到当前用户目录，安装完成后从开始菜单打开 **AudioSwitch**。
 
@@ -89,7 +89,7 @@
 
 **关于自启动。** 安装向导、设置页和托盘菜单均可设置。登录后在托盘运行；如果已在 Windows 任务管理器中禁用启动项，需要在那里重新开启。
 
-**关于设备。** 同时切换播放和通信的默认输出，不修改麦克风或音量。当前设备断开时，另一台可用则尝试回退；重新连接耳机不会抢回输出。未连接的已选设备会明确标注，仍可保存快捷键等偏好。更换 USB 端口或驱动后，可刷新并重新选择设备。
+**关于设备。** 同时切换播放和通信的默认输出，不修改麦克风或音量。当前设备断开时，另一台可用则尝试回退；重新连接耳机不会抢回输出。设置页自动刷新连接状态并显示当前输出；已选设备断开后保留配置，仍可保存快捷键等偏好。托盘菜单勾选当前输出，未连接设备不可点击。只有一台可用时选择可用设备，已在使用时给出提示。更换 USB 端口或驱动后，可刷新并重新选择设备。
 
 **关于更新。** 启动时检查版本只通知，不弹出安装对话框。从托盘选择“检查更新”，检查时立即显示进度，支持取消和连接超时提示。确认后下载并校验 SHA-256，再打开新版安装向导。测试版会检查后续测试版和正式版；正式版仅检查正式更新。
 
