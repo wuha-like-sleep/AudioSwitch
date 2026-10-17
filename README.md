@@ -28,6 +28,23 @@
 
 <br />
 
+<details>
+<summary>查看更新与安装界面</summary>
+
+**更新下载**
+
+![更新下载界面](docs/images/update.png)
+
+**版本检查结果**
+
+![版本提示界面](docs/images/dialog.png)
+
+**安装向导**
+
+![安装向导](docs/images/installer.png)
+
+</details>
+
 ## 不止是切换
 
 | 一键切换 | 按你的习惯 | 保持专注 |
@@ -42,9 +59,9 @@
 
 | 你的电脑 | 下载 |
 | :--- | :--- |
-| Intel / AMD 64 位电脑 · 大多数用户选择此项 | **[Windows x64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.2.0-preview.1/AudioSwitch-Setup-win-x64.exe)** |
-| Windows ARM64 电脑 | [Windows ARM64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.2.0-preview.1/AudioSwitch-Setup-win-arm64.exe) |
-| Windows 10 32 位电脑 | [Windows x86](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.2.0-preview.1/AudioSwitch-Setup-win-x86.exe) |
+| Intel / AMD 64 位电脑 · 大多数用户选择此项 | **[Windows x64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.2.1-preview.1/AudioSwitch-Setup-win-x64.exe)** |
+| Windows ARM64 电脑 | [Windows ARM64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.2.1-preview.1/AudioSwitch-Setup-win-arm64.exe) |
+| Windows 10 32 位电脑 | [Windows x86](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.2.1-preview.1/AudioSwitch-Setup-win-x86.exe) |
 
 运行安装向导，选择安装位置、自启动和桌面快捷方式。程序默认安装到当前用户目录，安装完成后从开始菜单打开 **AudioSwitch**。
 
@@ -68,7 +85,7 @@
 
 **关于设备。** 同时切换播放和通信的默认输出，不修改麦克风或音量。当前设备断开时，另一台可用则尝试回退；重新连接耳机不会抢回输出。更换 USB 端口或驱动后，可刷新并重新选择设备。
 
-**关于更新。** 启动时检查版本只通知，不弹出安装对话框。从托盘选择“检查更新”，确认后下载并校验 SHA-256，再打开新版安装向导。测试版不进入正式自动更新渠道。
+**关于更新。** 启动时检查版本只通知，不弹出安装对话框。从托盘选择“检查更新”，检查时立即显示进度，支持取消和连接超时提示。确认后下载并校验 SHA-256，再打开新版安装向导。测试版会检查后续测试版和正式版；正式版仅检查正式更新。
 
 **关于配置。** 设置保存在 `%LOCALAPPDATA%\AudioSwitch\settings.json`。更新请求不上传设备配置。卸载会清理程序、自启动项和快捷方式，保留配置以便重装。
 
@@ -89,7 +106,7 @@
 使用 Windows Core Audio 枚举设备，使用未公开的 `IPolicyConfig` COM 接口设置默认输出；Windows 更新后的兼容性需要验证。
 三个默认角色依次设置并读回确认，不是原子操作，失败时可能只改变部分默认角色。
 
-Windows CI 验证安装、自启动注册、应用运行、设置窗口和卸载清理。发行前仍需验证实际音频播放、USB 拔插、重新登录、快捷键冲突、游戏场景和显示缩放。
+Windows CI 验证音频接口、配置保存与覆盖、写入失败保护、快捷键、自启动、版本通道、更新取消、安装及卸载，并检查应用和安装器的界面截图。发行前仍需验证实际音频播放、USB 拔插、重新登录、快捷键冲突、游戏场景和显示缩放。
 应用与安装器尚未配置代码签名证书。
 
 </details>
