@@ -114,3 +114,22 @@ CI 验证服务安装、启动、停止、删除；构造管理员测试绑定�
 系统服务安装固定为原生 Program Files 下的 AudioSwitch Login Lab，不接受自定义目录；管理员工具也核对自身路径才允许注册服务。CI 验证自定义可写目录和开发目录中的松散工具不能注册服务。
 
 Preview 2 的固定路径和自定义目录拒绝检查已通过最终 Windows CI；升级实验组件后可能需重启以释放旧 DLL，首次启动仍使用系统 Hello / PIN 登录。
+
+
+### 0.3.6：本机凭据初始化、存储与自动提交
+
+默认关闭。应用仅启动已安装的原生管理员工具，命令参数只有操作与目标 SID；不接触密码。原生工具调用 Windows CredUI（`CREDUIWIN_GENERIC`，不是安全桌面提示；不宣称它是 Hello），用户输入邮箱与账户密码并确认持久化。初始化请求仅发往固定路径的 LocalSystem 服务，以机器 DPAPI 包装临时内容；服务核对安装目录中的管理员工具、会话用户 SID，执行 `LogonUserW` 后比较返回令牌 SID。验证失败、取消、账户不符或未绑定不启用。真实个人微软账户的此初始化路径仍需真机验证，CI 不使用真实密码。无密码账户及 PIN / Hello 不作为可保存密码。
+
+服务保存机器 DPAPI 密文，注册表 Vault 根与账户子键使用受保护 DACL，仅 SYSTEM 和 Administrators 全权访问，并检查 ACL 与所有者。机器 DPAPI 本身允许同机上下文解密，**访问隔离依靠注册表 ACL，管理员仍可读取/解密或修改系统**。密文记录内绑定版本、SID、账户名与手机地址；加载时逐一核对。初始化缓冲、解密内容、密码和测试密文在释放时擦除，不写日志，不经命令行传递。公开绑定键只保存自动配置标记，不保存密码。
+
+桥接协议升至 v2。AutoProbe 仅允许已初始化的真实 LogonUI / SYSTEM 锁定会话：至少 3 次通道验证失败、跨度至少 12 秒后标记可以检测恢复，初始就在场不会马上自动提交；缺少适配器或配对身份不用于启动此判定。恢复认证连接后发放 2 秒内、绑定当前会话/手机/会话事件代次的随机请求票据。AutoCommit 消耗该票据，同一次锁屏最多一次；不通过重复密码尝试猜测账户。新锁屏事件可重置次数，服务重启会丢失内存判定，需要重新经历失败/恢复过程。
+
+Credential Provider 后台线程仅探测手机，不预先解密密码，通过所属线程的消息窗口通知 `ICredentialProviderEvents::CredentialsChanged`；只有新鲜许可才在 `GetCredentialCount` 返回自动默认凭据。`GetSerialization` 再向服务消费票据、读取并解密本机凭据、再次检查撤销/手机/期限，随后按原受保护身份提供程序格式交给 Windows。不会模拟按键、不设置 Windows AutoAdminLogon，也不禁用系统提供程序。结束或重新枚举取消线程并释放事件窗口。未初始化仍支持原手动实验路径。
+
+自动 Windows 认证失败在 `ReportResult` 撤销并删除保存凭据，必须用 Hello / PIN 登录后重新初始化；存储损坏或身份不匹配也停用。按钮“停用并清除”、重新绑定/解除绑定和卸载清理密文与标记。更换账户密码后需重新初始化。普通音频安装器不安装服务或初始化凭据。
+
+CI 检查虚构记录的 DPAPI 往返、密文不含测试密码、受限令牌不能读取注册表密文、身份不符、密文篡改及撤销；策略测试覆盖初始在场、短暂失败、持续失败后恢复、错误绑定/代次、过期、单次消费和禁止重复尝试。真实 CredUI 输入、微软账户初始化、LogonUI 事件切换、真实手机与自动解锁成功不在 CI 范围。不能将单元检查写成实际无确认自动解锁已经成功。
+
+限制：通道不可用也可能由配置、服务占用或无线干扰导致，不等于精确离开；恢复认证不证明人在场，仍不防蓝牙中继。不适用于无密码微软账户、本地/组织账户、开机首次登录；系统 Hello / PIN 始终作为独立入口。
+
+资料：[CredUI](https://learn.microsoft.com/en-us/windows/win32/api/wincred/nf-wincred-creduipromptforwindowscredentialsw)、[LogonUserW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-logonuserw)、[DPAPI 范围](https://learn.microsoft.com/en-us/windows/win32/seccrypto/example-c-program-using-cryptprotectdata)、[自动默认凭据](https://learn.microsoft.com/en-us/windows/win32/api/credentialprovider/nf-credentialprovider-icredentialprovider-getcredentialcount)、[CredentialsChanged](https://learn.microsoft.com/en-us/windows/win32/api/credentialprovider/nf-credentialprovider-icredentialproviderevents-credentialschanged)。

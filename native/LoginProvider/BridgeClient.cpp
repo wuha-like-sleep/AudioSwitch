@@ -1,5 +1,6 @@
 #include <windows.h>
 #include <bcrypt.h>
+#include <objbase.h>
 #include "BridgeProtocol.h"
 #include "BridgeClient.h"
 namespace {
@@ -57,7 +58,7 @@ DWORD EnrollLocalCredential(PCWSTR sid) {
     DWORD error = CredUIPromptForWindowsCredentialsW(&info, 0, &package, nullptr, 0, &buffer, &bytes, nullptr, CREDUIWIN_GENERIC);
     if (error != ERROR_SUCCESS) return error;
     Vault::Record record; record.phone = phone; wcsncpy_s(record.sid, sid, _TRUNCATE);
-    wchar_t user[512]{}, domain[512]{}; DWORD userSize = _countof(user), domainSize = _countof(domain), passwordSize = _countof(record.password);
+    wchar_t user[512]{}, domain[512]{}; DWORD userSize = 512, domainSize = 512, passwordSize = 1025;
     const bool unpacked = CredUnPackAuthenticationBufferW(0, buffer, bytes, user, &userSize, domain, &domainSize, record.password, &passwordSize) != FALSE;
     error = unpacked ? ERROR_SUCCESS : GetLastError();
     SecureZeroMemory(buffer, bytes); CoTaskMemFree(buffer);

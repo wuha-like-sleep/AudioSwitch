@@ -34,7 +34,7 @@ void Marker(PCWSTR sid, DWORD enabled) {
 }
 bool Valid(const Record& record) {
     constexpr wchar_t prefix[] = L"MicrosoftAccount\\";
-    return record.magic == 0x41535631 && record.version == 1 && record.size == sizeof(Record) && !record.reserved && record.phone && wmemchr(record.sid, 0, _countof(record.sid)) && wcsncmp(record.sid, L"S-1-", 4) == 0 && !wcspbrk(record.sid, L"\\/") && wmemchr(record.qualified, 0, _countof(record.qualified)) && _wcsnicmp(record.qualified, prefix, _countof(prefix) - 1) == 0 && record.qualified[_countof(prefix) - 1] && wmemchr(record.password, 0, _countof(record.password)) && record.password[0];
+    return record.magic == 0x41535631 && record.version == 1 && record.size == sizeof(Record) && !record.reserved && record.phone && wmemchr(record.sid, 0, (sizeof(record.sid) / sizeof(wchar_t))) && wcsncmp(record.sid, L"S-1-", 4) == 0 && !wcspbrk(record.sid, L"\\/") && wmemchr(record.qualified, 0, (sizeof(record.qualified) / sizeof(wchar_t))) && _wcsnicmp(record.qualified, prefix, (sizeof(prefix) / sizeof(wchar_t)) - 1) == 0 && record.qualified[(sizeof(prefix) / sizeof(wchar_t)) - 1] && wmemchr(record.password, 0, (sizeof(record.password) / sizeof(wchar_t))) && record.password[0];
 }
 bool Enabled(PCWSTR sid) {
     wchar_t path[512]{}; if (!sid || swprintf_s(path, L"%s%s", Bridge::BindingRoot, sid) < 0) return false;

@@ -118,7 +118,7 @@ public:
         if (!response || !serialized || !status || !icon) return E_POINTER;
         *response = CPGSR_NO_CREDENTIAL_NOT_FINISHED; *serialized = {}; *status = nullptr; *icon = CPSI_NONE;
         const bool automatic = AutomaticReady() && (!password.text || !*password.text);
-        autoReady = false;
+        autoReady = false; automaticSubmitted = false;
         Vault::Record saved;
         if (automatic) {
             if (!CommitAutomatic(sid, automaticApproval)) { SetDeselected(); *icon = CPSI_WARNING; return CopyText(L"手机证明已失效，未提交凭据。可继续使用 PIN / Windows Hello。", status); }
@@ -135,6 +135,13 @@ public:
         ULONG package = 0;
         auto hr = NegotiatePackage(&package);
         if (FAILED(hr)) { SetDeselected(); return hr; }
+        if (automatic) {
+            uint64_t currentPhone = 0; const auto now = GetTickCount64();
+            if (!Vault::Enabled(sid) || !Bridge::ReadBinding(sid, &currentPhone) || currentPhone != saved.phone || now < automaticApproval.completed || now - automaticApproval.completed > 2000) {
+                SetDeselected(); automaticSubmitted = false; *icon = CPSI_WARNING;
+                return CopyText(L"自动提交已撤销或手机证明过期，未提交凭据。可继续使用系统登录选项。", status);
+            }
+        }
         const DWORD flags = CRED_PACK_PROTECTED_CREDENTIALS | CRED_PACK_ID_PROVIDER_CREDENTIALS;
         DWORD bytes = 0;
         const BOOL sized = CredPackAuthenticationBufferW(flags, qualified, password.text, nullptr, &bytes);
