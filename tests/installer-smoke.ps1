@@ -38,6 +38,19 @@ public class WindowCapture {
     [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
     [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
     [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr dc, uint flags);
+    private delegate bool EnumWindowProc(IntPtr window, IntPtr data);
+    [DllImport("user32.dll")] private static extern bool EnumWindows(EnumWindowProc callback, IntPtr data);
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);
+    [DllImport("user32.dll")] private static extern bool IsWindowVisible(IntPtr window);
+    public static IntPtr FindVisibleWindow(int processId) {
+        IntPtr found = IntPtr.Zero;
+        EnumWindows((window, data) => {
+            uint id; GetWindowThreadProcessId(window, out id);
+            if (id == (uint)processId && IsWindowVisible(window)) { found = window; return false; }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
 }
 '@
     $rect = New-Object WindowCapture+RECT
@@ -56,19 +69,21 @@ public class WindowCapture {
     if (-not $preview.HasExited) { Stop-Process -Id $preview.Id; $preview.WaitForExit() }
 }
 function Save-Preview($Process, [string]$Name) {
+    $windowHandle = [IntPtr]::Zero
     for ($attempt = 0; $attempt -lt 20; $attempt++) {
         Start-Sleep -Milliseconds 500
         $Process.Refresh()
-        if ($Process.MainWindowHandle -ne 0) { break }
+        $windowHandle = [WindowCapture]::FindVisibleWindow($Process.Id)
+        if ($windowHandle -ne [IntPtr]::Zero) { break }
         if ($Process.HasExited) { throw "$Name exited before its window appeared" }
     }
-    if ($Process.MainWindowHandle -eq 0) { throw "$Name window did not open" }
+    if ($windowHandle -eq [IntPtr]::Zero) { throw "$Name window did not open" }
     $rect = New-Object WindowCapture+RECT
-    [void][WindowCapture]::GetWindowRect($Process.MainWindowHandle, [ref]$rect)
+    [void][WindowCapture]::GetWindowRect($windowHandle, [ref]$rect)
     $image = New-Object System.Drawing.Bitmap(($rect.Right - $rect.Left), ($rect.Bottom - $rect.Top))
     $canvas = [System.Drawing.Graphics]::FromImage($image)
     $dc = $canvas.GetHdc()
-    try { $ok = [WindowCapture]::PrintWindow($Process.MainWindowHandle, $dc, 2) }
+    try { $ok = [WindowCapture]::PrintWindow($windowHandle, $dc, 2) }
     finally { $canvas.ReleaseHdc($dc) }
     if (-not $ok) { throw "$Name capture failed" }
     $image.Save((Join-Path $PSScriptRoot "../artifacts/$Name-preview.png"))
