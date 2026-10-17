@@ -53,3 +53,22 @@ GitHub 为上传的资产生成 SHA-256 digest。只有包含校验信息且架�
 当前没有实现手机自动解锁或手机确认解锁。解除已经锁定的 Windows 会话需要系统登录认证；`DeviceWatcher` 的连接状态、名称和信号值不能直接作为解锁凭据。仅使用现有 iPhone 配对、不安装手机 App 的路线仍需独立验证：Windows Credential Provider 与受保护的认证通道、手机身份确认、账户类型兼容性、撤销/恢复方案，以及真实锁定会话测试。
 
 后续登录组件不得禁用 Windows 原有的密码、PIN 或 Windows Hello 提供程序；不得以模拟输入、明文配置或单纯名称/RSSI 匹配宣称完成认证。当前发行版只取消离开倒计时或调用系统锁屏，不会解锁会话。参考：[Windows Credential Providers](https://learn.microsoft.com/en-us/windows/win32/secauthn/credential-providers-in-windows)。
+
+
+### 0.3.3：无手机 App 的 iPhone 路线研究
+
+| 环节 | 当前状态 |
+| :--- | :--- |
+| 已配对手机、连接和实时信号观察 | 已有实现，具体 iPhone/适配器支持需真机确认 |
+| 认证加密蓝牙链路 | 新增手动检测；尚无真实 iPhone 成功记录 |
+| 微软账户认证材料 | 未确认；日常使用 PIN / Hello 不足以判断是否有密码 |
+| 自定义 Windows Credential Provider | 未实现、未注册、未随安装包安装 |
+| 已锁定会话自动解锁 | 未实现；不得把检测通过写成解锁成功 |
+
+`UnlockLinkProbe` 尝试查询 iPhone 的 HFP Audio Gateway RFCOMM 服务，建立要求 `BluetoothEncryptionWithAuthentication` 的 `StreamSocket`，并核对实际 `ProtectionLevel`。不发送通话指令，不采用允许空认证的保护级别；连接、服务和设备对象随后释放。20 秒超时，关闭窗口取消。该测试只在用户点击时运行，可能因手机服务未暴露、权限、适配器或其他软件占用而失败。HFP 连接成功也不证明手机的实时距离、人在场或 Windows 账户身份，仍需评估中继风险和锁定会话下的可用性。
+
+Credential Provider 负责收集和序列化凭据，最终由 Windows 认证机制授权；添加一个提供程序本身不会让蓝牙身份变成有效的微软账户凭据。PIN / Hello 不能作为可读取并重复提交的账户密码。Windows 的“仅允许 Windows Hello 登录”设置也不能单独证明微软账户是否已删除密码。账户状态应由用户在 Windows 登录选项及微软账户安全设置中确认，本程序不要求向开发者提供密码或 PIN。
+
+后续原型必须先确定系统支持的认证材料及本机初始化方式，再设计独立提供程序和受保护服务之间的协议、秘密保存、撤销、重试限制与失败回退。保留系统登录入口，在隔离的 Windows 10/11 真机上验证锁定/解锁、重启、离线、手机丢失、蓝牙断开、组件卸载和恢复。当前 CI 只检查保护级别拒绝、缺少手机、模拟结果展示、关闭取消和界面布局，不连接真实手机、不调用登录认证或解锁。
+
+资料：[Credential Provider 架构](https://learn.microsoft.com/en-us/windows/win32/secauthn/credential-providers-in-windows)、[Windows Hello](https://learn.microsoft.com/en-us/windows/apps/develop/security/windows-hello)、[Windows 无密码登录设置](https://support.microsoft.com/en-us/windows/security/go-passwordless-in-windows)、[RFCOMM](https://learn.microsoft.com/en-us/uwp/devices-sensors/send-or-receive-files-with-rfcomm)、[SocketProtectionLevel](https://learn.microsoft.com/en-us/uwp/api/windows.networking.sockets.socketprotectionlevel)。

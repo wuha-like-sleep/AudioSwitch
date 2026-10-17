@@ -89,7 +89,13 @@ internal sealed class ProximityForm : ChromeForm
         threshold.ValueChanged += (_, _) => { testGuard.Reset(); testWouldLock = false; };
         hysteresis.ValueChanged += (_, _) => { testGuard.Reset(); testWouldLock = false; };
         var refresh = Button("刷新手机", false); refresh.Click += (_, _) => FillPhones((phone.SelectedItem as Choice)?.Id ?? "");
-        footer.Controls.AddRange([done, cancel, refresh, test]); root.Controls.Add(footer, 0, 5);
+        var unlock = Button("解锁检测", false);
+        unlock.Click += (_, _) =>
+        {
+            using var form = new UnlockProbeForm((phone.SelectedItem as Choice)?.Id ?? "");
+            form.ShowDialog(this);
+        };
+        footer.Controls.AddRange([done, cancel, refresh, test, unlock]); root.Controls.Add(footer, 0, 5);
         Controls.Add(root); root.BringToFront(); AcceptButton = done; CancelButton = cancel;
         timer.Tick += (_, _) => RefreshStatus(); timer.Start(); RefreshStatus();
         Shown += (_, _) => done.Focus();
@@ -136,7 +142,7 @@ internal sealed class ProximityForm : ChromeForm
     {
         fields.Controls.Add(new Label { Text = name, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, row); fields.Controls.Add(control, 1, row);
     }
-    private static ThemeButton Button(string text, bool primary) => new() { Text = text, Primary = primary, Size = new Size(120, 42), Margin = new Padding(10, 8, 0, 0) };
+    private static ThemeButton Button(string text, bool primary) => new() { Text = text, Primary = primary, Size = new Size(104, 42), Margin = new Padding(8, 8, 0, 0) };
     protected override void Dispose(bool disposing) { if (disposing) timer.Dispose(); base.Dispose(disposing); }
     private sealed record Choice(string Id, string Label) { public override string ToString() => Label; }
 }

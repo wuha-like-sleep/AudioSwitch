@@ -207,6 +207,37 @@ internal static class SettingsStore
             // A runner may have no Bluetooth adapter. An API loading failure must still fail verification.
             if (presence.Failure is ArgumentException or TypeLoadException or FileNotFoundException) throw new InvalidOperationException("Bluetooth API initialization failed.", presence.Failure);
         }
+        if (UnlockLinkProbe.IsAuthenticated(Windows.Networking.Sockets.SocketProtectionLevel.PlainSocket)
+            || UnlockLinkProbe.IsAuthenticated(Windows.Networking.Sockets.SocketProtectionLevel.BluetoothEncryptionAllowNullAuthentication)
+            || !UnlockLinkProbe.IsAuthenticated(Windows.Networking.Sockets.SocketProtectionLevel.BluetoothEncryptionWithAuthentication))
+            throw new InvalidOperationException("Bluetooth link probe accepted an insufficient protection level.");
+        var emptyProbe = UnlockLinkProbe.RunAsync("", CancellationToken.None).GetAwaiter().GetResult();
+        if (emptyProbe.AuthenticatedChannel) throw new InvalidOperationException("Missing phone was marked verified.");
+        bool probeInvoked = false;
+        using (var probeForm = new UnlockProbeForm("test-phone", (id, _) =>
+        {
+            probeInvoked = id == "test-phone";
+            return Task.FromResult(new UnlockProbeResult("测试结果", "模拟结果，仅检查界面，不建立蓝牙连接。"));
+        }))
+        {
+            probeForm.Show(); VerifyButtonBounds(probeForm);
+            Descendants(probeForm).OfType<ThemeButton>().First(b => b.Text == "开始检测").PerformClick();
+            if (!probeInvoked || !probeForm.Report.Contains("模拟结果")) throw new InvalidOperationException("Unlock link probe UI did not show its result.");
+            probeForm.Close();
+        }
+        bool probeCancelled = false;
+        using (var probeForm = new UnlockProbeForm("test-phone", async (_, cancellation) =>
+        {
+            using var registration = cancellation.Register(() => probeCancelled = true);
+            await Task.Delay(Timeout.Infinite, cancellation);
+            return new("", "");
+        }))
+        {
+            probeForm.Show();
+            Descendants(probeForm).OfType<ThemeButton>().First(b => b.Text == "开始检测").PerformClick();
+            probeForm.Close(); Application.DoEvents();
+            if (!probeCancelled) throw new InvalidOperationException("Closing link probe did not cancel pending work.");
+        }
         File.Delete(path);
     }
     private static void VerifyButtonBounds(Control root)
