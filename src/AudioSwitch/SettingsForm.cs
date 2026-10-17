@@ -10,6 +10,10 @@ internal sealed class SettingsForm : ChromeForm
     private readonly ComboBox toastMonitor = DevicePicker();
     private readonly Toggle startup = new() { Text = "登录 Windows 后自动启动" };
     private readonly Toggle autoUpdate = new() { Text = "启动时检查新版本" };
+    private readonly Label outputStatus = new() { Dock = DockStyle.Fill, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleRight, ForeColor = Theme.Muted };
+    private readonly Label headphoneStatus = new() { AutoSize = true, ForeColor = Theme.Muted };
+    private readonly Label speakerStatus = new() { AutoSize = true, ForeColor = Theme.Muted };
+    private List<OutputDevice> knownDevices = [];
     private uint modifiers;
     private Keys hotkey;
     public Settings? Selection { get; private set; }
@@ -77,7 +81,12 @@ internal sealed class SettingsForm : ChromeForm
         hero.Controls.Add(author, 2, 0);
         hero.SetRowSpan(author, 2);
         root.Controls.Add(hero, 0, 0);
-        root.Controls.Add(new Label { Text = "输出设备", Font = new Font(Font, FontStyle.Bold), Dock = DockStyle.Fill, Padding = new Padding(0, 14, 0, 0) }, 0, 1);
+        var deviceHeading = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Margin = Padding.Empty };
+        deviceHeading.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+        deviceHeading.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        deviceHeading.Controls.Add(new Label { Text = "输出设备", Font = new Font(Font, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
+        deviceHeading.Controls.Add(outputStatus, 1, 0);
+        root.Controls.Add(deviceHeading, 0, 1);
         var cards = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Margin = Padding.Empty };
         cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
         cards.Controls.Add(DeviceCard("耳机", "个人聆听、游戏与通话", headphones), 0, 0);
@@ -124,6 +133,10 @@ internal sealed class SettingsForm : ChromeForm
         footer.Controls.AddRange([save, cancel, refresh]); root.Controls.Add(footer, 0, 5);
         Controls.Add(root); root.BringToFront(); AcceptButton = save; CancelButton = cancel;
         Fill(devices, settings?.Headphones, settings?.Speakers);
+        headphones.SelectedIndexChanged += (_, _) => UpdateConnectionStatus();
+        speakers.SelectedIndexChanged += (_, _) => UpdateConnectionStatus();
+        UpdateConnectionStatus();
+        outputStatus.Text = "设备状态自动刷新";
         refresh.Click += (_, _) =>
         {
             try { Fill(AudioDevices.List(), (headphones.SelectedItem as Choice)?.Id, (speakers.SelectedItem as Choice)?.Id); FillMonitors((toastMonitor.SelectedItem as Choice)?.Id ?? ""); }
@@ -166,7 +179,9 @@ internal sealed class SettingsForm : ChromeForm
         var layout = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent, ColumnCount = 1, RowCount = 3 };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         layout.Controls.Add(new Label { Text = title, BackColor = Color.White, ForeColor = Accent, Font = new Font(Font.FontFamily, 15, FontStyle.Bold), AutoSize = true }, 0, 0);
-        layout.Controls.Add(new Label { Text = subtitle, BackColor = Color.White, ForeColor = Muted, AutoSize = true }, 0, 1);
+        var status = title == "耳机" ? headphoneStatus : speakerStatus;
+        status.Text = subtitle;
+        layout.Controls.Add(status, 0, 1);
         layout.Controls.Add(picker, 0, 2); card.Controls.Add(layout); return card;
     }
     private static ThemeButton ActionButton(string text, bool primary)
@@ -175,6 +190,7 @@ internal sealed class SettingsForm : ChromeForm
     }
     private void Fill(List<OutputDevice> devices, string? h, string? s)
     {
+        knownDevices = devices.ToList();
         headphones.Items.Clear(); speakers.Items.Clear();
         foreach (var device in devices)
         {
@@ -183,6 +199,26 @@ internal sealed class SettingsForm : ChromeForm
         }
         RestoreChoice(headphones, h, "已保存的耳机 · 未连接");
         RestoreChoice(speakers, s, "已保存的音箱 · 未连接");
+    }
+    public void UpdateDevices(List<OutputDevice> devices, string? current)
+    {
+        // Preserve focus and an open picker while devices are plugged in or removed.
+        if (!headphones.DroppedDown && !speakers.DroppedDown && !knownDevices.SequenceEqual(devices))
+            Fill(devices, (headphones.SelectedItem as Choice)?.Id, (speakers.SelectedItem as Choice)?.Id);
+        outputStatus.Text = "正在播放 · " + (devices.FirstOrDefault(d => d.Id == current)?.Name ?? "无可用输出");
+        UpdateConnectionStatus();
+    }
+    private void UpdateConnectionStatus()
+    {
+        UpdateConnection(headphones, headphoneStatus);
+        UpdateConnection(speakers, speakerStatus);
+    }
+    private void UpdateConnection(ComboBox picker, Label label)
+    {
+        bool chosen = picker.SelectedItem is Choice;
+        bool online = picker.SelectedItem is Choice choice && knownDevices.Any(d => d.Id == choice.Id);
+        label.Text = !chosen ? "请选择一个输出设备" : online ? "已连接 · 可以切换" : "未连接 · 插入后自动识别";
+        label.ForeColor = online ? Color.FromArgb(27, 139, 103) : Muted;
     }
     private static void RestoreChoice(ComboBox picker, string? id, string offlineLabel)
     {

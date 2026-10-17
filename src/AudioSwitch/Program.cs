@@ -27,6 +27,7 @@ internal static class Program
             using var preview = new SettingsForm(
                 [new("preview-headphones", "USB 耳机 · Headphones"), new("preview-speakers", "USB 音箱 · Speakers")],
                 new Settings("preview-headphones", "preview-speakers"));
+            preview.UpdateDevices([new("preview-headphones", "USB 耳机 · Headphones"), new("preview-speakers", "USB 音箱 · Speakers")], "preview-headphones");
             preview.ShowDialog();
             return;
         }
@@ -59,6 +60,9 @@ internal sealed class TrayContext : ApplicationContext
     private readonly HotkeyWindow hotkey;
     private readonly ToolStripMenuItem switchItem;
     private readonly ToolStripMenuItem startupItem;
+    private readonly ToolStripMenuItem outputItem = new("正在读取输出…") { Enabled = false };
+    private readonly ToolStripMenuItem headphoneItem;
+    private readonly ToolStripMenuItem speakerItem;
     private readonly UpdateService updates;
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 2500 };
     private Settings? settings;
@@ -80,9 +84,12 @@ internal sealed class TrayContext : ApplicationContext
         hotkey = new HotkeyWindow(Switch, Configure);
         hotkey.TryChange(settings?.HotkeyModifiers ?? 3, settings?.HotkeyKey ?? Keys.F11);
         switchItem = new ToolStripMenuItem("切换耳机 / 音箱", null, (_, _) => Switch());
+        menu.Items.Add(outputItem);
+        menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(switchItem);
-        menu.Items.Add("选择耳机…", null, (_, _) => SelectOutput(true));
-        menu.Items.Add("选择音箱…", null, (_, _) => SelectOutput(false));
+        headphoneItem = new ToolStripMenuItem("耳机", null, (_, _) => SelectOutput(true));
+        speakerItem = new ToolStripMenuItem("音箱", null, (_, _) => SelectOutput(false));
+        menu.Items.Add(headphoneItem); menu.Items.Add(speakerItem);
         menu.Items.Add("设备设置…", null, (_, _) => Configure());
         startupItem = new ToolStripMenuItem("登录 Windows 后自动启动", null, (_, _) =>
         {
@@ -91,7 +98,7 @@ internal sealed class TrayContext : ApplicationContext
         });
         menu.Items.Add(startupItem);
         menu.Items.Add("检查更新…", null, async (_, _) => await updates.CheckAsync(false));
-        menu.Opening += (_, _) => RefreshMenu();
+        menu.Opening += (_, _) => { RefreshMenu(); RefreshStatus(); };
         RefreshMenu();
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("退出", null, (_, _) => ExitThread());
@@ -127,6 +134,7 @@ internal sealed class TrayContext : ApplicationContext
         {
             using var form = new SettingsForm(AudioDevices.List(), settings, SaveSettings);
             settingsForm = form;
+            RefreshStatus();
             form.ShowDialog();
         }
         catch (Exception ex) { AppDialog.Show("读取音频设备失败：" + ex.Message, "无法打开设置"); }
@@ -171,7 +179,13 @@ internal sealed class TrayContext : ApplicationContext
     {
         if (configuring) return;
         if (settings == null) { Configure(); return; }
-        try { Apply(AudioDevices.Default() == settings.Headphones ? settings.Speakers : settings.Headphones); }
+        try
+        {
+            var devices = AudioDevices.List();
+            var target = SwitchTarget.Choose(settings, AudioDevices.Default(), devices.Select(d => d.Id));
+            if (target == null) { Notify("耳机和音箱都未连接，请连接设备后重试。", true); return; }
+            Apply(target);
+        }
         catch (Exception ex) { Notify("切换失败：" + ex.Message, true); }
     }
 
@@ -181,13 +195,23 @@ internal sealed class TrayContext : ApplicationContext
         {
             var device = AudioDevices.List().FirstOrDefault(d => d.Id == id);
             if (device == null) { Notify("目标设备未连接。请插入 USB 设备，或在设置中重新选择。", true); return; }
+            if (AudioDevices.Default() == id)
+            {
+                ShowSwitchToast("正在使用" + (id == settings?.Headphones ? "耳机" : "音箱"), device.Name);
+                return;
+            }
             AudioDevices.SetDefault(id);
             RefreshStatus();
-            toast?.Close();
-            toast = new SwitchToast(id == settings?.Headphones ? "耳机" : "音箱", device.Name, settings?.ToastMonitor ?? "");
-            toast.Show();
+            ShowSwitchToast(id == settings?.Headphones ? "耳机" : "音箱", device.Name);
         }
         catch (Exception ex) { Notify("切换未完成，部分默认输出可能已经改变。请检查 Windows 声音设置。\n" + ex.Message, true); }
+    }
+
+    private void ShowSwitchToast(string title, string name)
+    {
+        toast?.Close(); toast?.Dispose();
+        toast = new SwitchToast(title, name, settings?.ToastMonitor ?? "");
+        toast.Show();
     }
 
     private void RefreshStatus()
@@ -197,6 +221,11 @@ internal sealed class TrayContext : ApplicationContext
             var devices = AudioDevices.List();
             var current = AudioDevices.Default();
             var name = devices.FirstOrDefault(d => d.Id == current)?.Name ?? "无输出设备";
+            outputItem.Text = "当前输出：" + name;
+            UpdateOutputItem(headphoneItem, "耳机", settings?.Headphones, devices, current);
+            UpdateOutputItem(speakerItem, "音箱", settings?.Speakers, devices, current);
+            switchItem.Enabled = settings == null || headphoneItem.Enabled || speakerItem.Enabled;
+            settingsForm?.UpdateDevices(devices, current);
             string text = "当前：" + name;
             tray.Text = text.Length > 63 ? text[..60] + "…" : text;
             // If the current configured endpoint disappeared, restore the other configured endpoint.
@@ -215,8 +244,18 @@ internal sealed class TrayContext : ApplicationContext
         catch (Exception ex)
         {
             tray.Text = "音频切换：无法读取音频状态";
+            outputItem.Text = "暂时无法读取音频状态";
+            headphoneItem.Enabled = false; speakerItem.Enabled = false;
             if (lastError != ex.Message) { Notify("音频状态读取失败：" + ex.Message, true); lastError = ex.Message; }
         }
+    }
+
+    private static void UpdateOutputItem(ToolStripMenuItem item, string label, string? id, List<OutputDevice> devices, string? current)
+    {
+        var device = devices.FirstOrDefault(d => d.Id == id);
+        item.Text = label + (id == null ? " · 尚未设置" : device == null ? " · 未连接" : " · " + device.Name);
+        item.Enabled = device != null;
+        item.Checked = id != null && id == current;
     }
 
     private void Notify(string message, bool error = false) => tray.ShowBalloonTip(3500, "音频切换", message, error ? ToolTipIcon.Warning : ToolTipIcon.Info);

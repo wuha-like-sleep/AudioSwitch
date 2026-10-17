@@ -43,6 +43,7 @@ internal static class SettingsStore
         using (var form = new SettingsForm([], second, (candidate, _) => { saved = candidate; return null; }))
         {
             form.Show();
+            form.UpdateDevices([new OutputDevice(second.Headphones, "Reconnected headphones")], second.Headphones);
             form.AcceptButton!.PerformClick();
             if (saved != second || form.Selection != second)
                 throw new InvalidOperationException("Saving preferences lost disconnected device selections.");
@@ -91,6 +92,12 @@ internal static class SettingsStore
             if (!monitor.WorkArea.Contains(new Rectangle(point, size)))
                 throw new InvalidOperationException("Toast placement escaped the selected screen.");
         }
+        if (SwitchTarget.Choose(first, first.Headphones, [first.Headphones, first.Speakers]) != first.Speakers
+            || SwitchTarget.Choose(first, first.Speakers, [first.Headphones, first.Speakers]) != first.Headphones
+            || SwitchTarget.Choose(first, "other-output", [first.Speakers]) != first.Speakers
+            || SwitchTarget.Choose(first, first.Headphones, [first.Headphones]) != first.Headphones
+            || SwitchTarget.Choose(first, null, []) != null)
+            throw new InvalidOperationException("Connected device switch selection failed.");
         File.Delete(path);
     }
 }
