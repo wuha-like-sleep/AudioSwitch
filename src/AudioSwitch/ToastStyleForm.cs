@@ -13,7 +13,7 @@ internal sealed class ToastStyleForm : ChromeForm
         Text = "AudioSwitch · 提示样式"; Icon = BrandIcon.Load();
         Font = new Font("Microsoft YaHei UI", 10); ForeColor = Theme.Ink;
         BackColor = Color.FromArgb(243, 246, 251);
-        ClientSize = new Size(560, 580); StartPosition = FormStartPosition.CenterParent;
+        ClientSize = new Size(560, 480); StartPosition = FormStartPosition.CenterParent;
         Corner = ToastPlacement.Corners.Contains(corner) ? corner : "bottom-right";
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, Padding = new Padding(24), AutoScroll = true };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -59,6 +59,7 @@ internal sealed class ToastStyleForm : ChromeForm
         footer.Controls.AddRange([done, cancel, test]); root.Controls.Add(footer, 0, 5);
         Controls.Add(root); root.BringToFront(); AcceptButton = done; CancelButton = cancel;
         UpdateSelection();
+        Shown += (_, _) => done.Focus();
         FormClosed += (_, _) => { preview?.Close(); preview?.Dispose(); };
     }
     private void UpdateSelection()
