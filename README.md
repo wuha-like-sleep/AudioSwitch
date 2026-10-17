@@ -10,7 +10,7 @@
 一个快捷键，循环切换 USB、蓝牙、HDMI 等输出设备。
 
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-465CE8?logo=windows&logoColor=white)](#安装)
-[![Release](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-v0.3.5--preview.2-465CE8)](https://github.com/wuha-like-sleep/AudioSwitch/releases)
+[![Release](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-v0.3.6--preview.1-465CE8)](https://github.com/wuha-like-sleep/AudioSwitch/releases)
 [![Build](https://github.com/wuha-like-sleep/AudioSwitch/actions/workflows/build.yml/badge.svg)](https://github.com/wuha-like-sleep/AudioSwitch/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/License-MIT-22A77A)](LICENSE)
 
@@ -91,9 +91,9 @@
 
 | 你的电脑 | 下载 |
 | :--- | :--- |
-| Intel / AMD 64 位电脑 · 大多数用户选择此项 | **[Windows x64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.5-preview.2/AudioSwitch-Setup-win-x64.exe)** |
-| Windows ARM64 电脑 | [Windows ARM64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.5-preview.2/AudioSwitch-Setup-win-arm64.exe) |
-| Windows 10 32 位电脑 | [Windows x86](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.5-preview.2/AudioSwitch-Setup-win-x86.exe) |
+| Intel / AMD 64 位电脑 · 大多数用户选择此项 | **[Windows x64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.6-preview.1/AudioSwitch-Setup-win-x64.exe)** |
+| Windows ARM64 电脑 | [Windows ARM64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.6-preview.1/AudioSwitch-Setup-win-arm64.exe) |
+| Windows 10 32 位电脑 | [Windows x86](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.6-preview.1/AudioSwitch-Setup-win-x86.exe) |
 
 运行安装向导，选择安装位置、自启动和桌面快捷方式。程序默认安装到当前用户目录，安装完成后从开始菜单打开 **AudioSwitch**。
 
@@ -101,18 +101,26 @@
 
 ## 可选：Windows 登录实验组件
 
-普通安装包只安装音频切换程序。**登录实验组件需单独安装、需要管理员权限，建议先在具备恢复手段的测试电脑上验证。** 它安装独立的 Windows Credential Provider 和本机桥接服务，保留系统 Windows Hello / PIN 等入口，不设为默认、不自动登录。绑定手机后，登录组件必须取得服务现场验证手机的新鲜结果，才提交手动输入的账户密码。
+普通安装包只安装音频切换程序。**登录实验组件需单独安装、需要管理员权限，建议先在具备恢复手段的测试电脑上验证。** 它安装独立的 Windows Credential Provider 和本机桥接服务，保留系统 Windows Hello / PIN 等入口，默认关闭自动提交。绑定手机并完成本机凭据初始化后，手机先持续验证不可用再恢复认证连接时，可以请求 Windows 自动提交；保留系统 Hello / PIN。真实 iPhone 和锁定会话自动解锁尚未验证。
 
 | 账户 / 登录方式 | 实验组件状态 |
 | :--- | :--- |
 | 具备可用密码的个人微软账户 | 已实现账户 SID 绑定及受保护凭据提交；绑定手机后需服务现场验证再提交；真实登录尚待验证 |
 | Windows Hello / PIN | 继续使用系统入口；不代理、读取或重放 PIN / 生物识别 |
 | 无密码微软账户、组织账户、本地账户 | 本次实验不支持，继续使用原有系统登录方式 |
-| iPhone 靠近自动解锁 | 未实现；不能仅凭蓝牙连接或信号宣称完成 |
+| iPhone 靠近自动解锁 | 自动提交实验代码已实现；真实 iPhone 和锁定会话成功解锁未验证 |
 
-在 **[0.3.5 实验版下载页](https://github.com/wuha-like-sleep/AudioSwitch/releases/tag/v0.3.5-preview.2)** 选择匹配系统原生架构的 `AudioSwitch-LoginLab-Setup-win-*.exe`。安装后从应用“离开锁屏 → 解锁检测 → 登录组件”绑定已配对手机，需要管理员确认，即时生效。绑定模式只用于同一用户已登录后锁定的会话。在 Windows 登录页的“登录选项”中选择“AudioSwitch 登录实验”，仍需手动输入微软账户密码；服务验证手机失败会停止提交并清除密码，切回原有 PIN / Hello 即可。未绑定时保留手动密码实验模式。密码不保存，提交、取消或失败后清除。不要把 PIN 当账户密码，也不要向开发者发送任何登录凭据。
+在 **[0.3.6 实验版下载页](https://github.com/wuha-like-sleep/AudioSwitch/releases/tag/v0.3.6-preview.1)** 选择匹配系统原生架构的 `AudioSwitch-LoginLab-Setup-win-*.exe`。安装后从应用“离开锁屏 → 解锁检测 → 登录组件”绑定已配对手机，需要管理员确认，即时生效。绑定模式只用于同一用户已登录后锁定的会话。在 Windows 登录页的“登录选项”中选择“AudioSwitch 登录实验”，仍需未初始化时手动输入微软账户密码；手机验证失败会停止提交并清除本次内存密码，切回原有 PIN / Hello 即可。未绑定时保留手动密码实验模式。未初始化时，手动输入的密码不持久化；显式初始化后，账户密码经本机服务验证 SID，采用机器 DPAPI 加密并保存在仅 SYSTEM / 管理员可读的注册表键中。管理员仍可访问，不能把机器 DPAPI 单独当作用户隔离。不要把 PIN 当账户密码，也不要向开发者发送任何登录凭据。
 
-卸载 Windows“已安装的应用”中的 **AudioSwitch 登录实验组件** 可移除它自己的注册、桥接服务和绑定，可能需要重启释放 DLL。独立卸载音频切换程序不会卸载该实验组件。[开发与验证范围](docs/DEVELOPMENT.md)
+卸载 Windows“已安装的应用”中的 **AudioSwitch 登录实验组件** 可移除它自己的注册、桥接服务、绑定和加密凭据，可能需要重启释放 DLL。独立卸载音频切换程序不会卸载该实验组件。[开发与验证范围](docs/DEVELOPMENT.md)
+
+### 本机初始化与自动提交（默认关闭）
+
+1. 安装匹配系统架构的 LoginLab，绑定手机，再点击“初始化并启用”。管理员确认后在 Windows 本机凭据窗口输入微软账户邮箱与账户密码（不是 PIN）。服务验证账户 SID 后才加密保存；失败或取消不会启用。
+2. 锁屏后，至少连续 3 次手机通道验证不可用并跨越至少 12 秒，再恢复认证连接，才允许一次自动提交。手机始终在旁边不会立即解锁；蓝牙服务占用也可能影响该判定，不能当作精确距离。
+3. 同一次锁屏最多自动提交一次；Windows 拒绝该次认证后会停用并清除初始化凭据，需用系统 Hello / PIN 登录并重新初始化。改密码后也需重新初始化。
+
+“停用并清除”、重新绑定、解除绑定和卸载 LoginLab 都会撤销本机凭据。保留系统 Hello / PIN，不代理或重放它们；不支持无密码微软账户、组织/本地账户或开机自动登录。**加密存储、策略与拒绝路径可在 CI 检查，真实手机自动解锁尚未验证。**
 
 ## 三步开始使用
 
@@ -140,7 +148,7 @@
 
 启动、解锁或休眠恢复后需先检测到手机可用；瞬间断连不会立即锁屏，条件恢复会取消倒计时。设置编辑、休眠、已锁屏或监测异常期间暂停。只调用 Windows 锁屏，不自动解锁。信号值不等于精确距离；仅使用实时负值信号，过期或不可用时暂停信号判定，不能保证所有手机都支持。[Windows 信号属性说明](https://learn.microsoft.com/en-us/windows/win32/properties/props-system-devices-aep-signalstrength)
 
-**关于手机解锁。** 当前未实现自动解锁或手机确认解锁。0.3.5 将手机认证桥接到独立 Windows 登录实验组件，可手动提交微软账户密码，尚未经真实微软账户登录验证。返回电脑后请使用 Windows Hello、PIN 或密码；取消离开倒计时不会解除已经锁定的会话。手机锁屏设置中的“解锁检测”可手动尝试建立要求认证的加密蓝牙链路，并显示结果、超时或错误；无需手机 App，不输入密码或 PIN。通过只代表蓝牙链路，不能解锁。仅 iPhone 蓝牙配对的自动解锁已接入认证加密通道和本机系统服务，但仍缺少真实 iPhone / 系统服务兼容性、有效账户认证、凭据初始化及受保护存储、自动提交与锁定会话验证。[研究进展](docs/DEVELOPMENT.md)
+**关于手机解锁。** 0.3.6 已实现本机凭据初始化、受保护存储和自动提交实验路径，默认关闭。尚无真实 iPhone 靠近自动解锁成功记录。返回电脑后请使用 Windows Hello、PIN 或密码；取消离开倒计时不会解除已经锁定的会话。手机锁屏设置中的“解锁检测”可手动尝试建立要求认证的加密蓝牙链路，并显示结果、超时或错误；无需手机 App，不输入密码或 PIN。通过只代表蓝牙链路，不能解锁。仅 iPhone 蓝牙配对的自动解锁已接入认证加密通道和本机系统服务，但仍需真实 iPhone / 系统服务兼容性、有效账户初始化和锁定会话自动解锁验证。[研究进展](docs/DEVELOPMENT.md)
 
 **关于诊断。** 设置页的“诊断信息”可复制软件版本、系统架构、快捷键注册和音频设备状态，便于反馈问题。不会上传信息；分享前请检查设备名称。
 

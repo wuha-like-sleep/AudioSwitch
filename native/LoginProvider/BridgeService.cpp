@@ -8,13 +8,35 @@
 #include <shlobj.h>
 #include <cstdio>
 #include "BridgeProtocol.h"
+#include "BridgeClient.h"
+#include "CredentialVault.h"
+#include "AutoPolicy.h"
+#include <array>
 namespace {
 SERVICE_STATUS_HANDLE statusHandle = nullptr;
 SERVICE_STATUS serviceStatus{SERVICE_WIN32_OWN_PROCESS, SERVICE_START_PENDING, 0, NO_ERROR, 0, 0, 0};
 HANDLE stopEvent = nullptr;
 LONG sessionEpoch = 0;
+SRWLOCK policyLock = SRWLOCK_INIT;
+std::array<Bridge::AutoPolicy, 64> policies{};
+Bridge::AutoPolicy* Policy(DWORD session) {
+    for (auto& value : policies) if (value.session == session) return &value;
+    for (auto& value : policies) if (!value.session) { value.session = session; return &value; }
+    return nullptr;
+}
 void Status(DWORD state) { serviceStatus.dwCurrentState = state; serviceStatus.dwControlsAccepted = state == SERVICE_RUNNING ? SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN | SERVICE_ACCEPT_SESSIONCHANGE : 0; SetServiceStatus(statusHandle, &serviceStatus); }
-DWORD WINAPI Control(DWORD command, DWORD, void*, void*) { if (command == SERVICE_CONTROL_SESSIONCHANGE) { InterlockedIncrement(&sessionEpoch); return NO_ERROR; } if (command == SERVICE_CONTROL_STOP || command == SERVICE_CONTROL_SHUTDOWN) { Status(SERVICE_STOP_PENDING); SetEvent(stopEvent); } return NO_ERROR; }
+DWORD WINAPI Control(DWORD command, DWORD event, void* data, void*) {
+    if (command == SERVICE_CONTROL_SESSIONCHANGE) {
+        InterlockedIncrement(&sessionEpoch);
+        if (data && (event == WTS_SESSION_LOCK || event == WTS_SESSION_UNLOCK || event == WTS_SESSION_LOGON || event == WTS_SESSION_LOGOFF)) {
+            const auto session = static_cast<WTSSESSION_NOTIFICATION*>(data)->dwSessionId;
+            AcquireSRWLockExclusive(&policyLock); auto state = Policy(session); if (state) { *state = {}; state->session = session; } ReleaseSRWLockExclusive(&policyLock);
+        }
+        return NO_ERROR;
+    }
+    if (command == SERVICE_CONTROL_STOP || command == SERVICE_CONTROL_SHUTDOWN) { Status(SERVICE_STOP_PENDING); SetEvent(stopEvent); }
+    return NO_ERROR;
+}
 bool Paired(uint64_t address) {
     BLUETOOTH_FIND_RADIO_PARAMS parameters{sizeof(parameters)}; HANDLE radio = nullptr;
     auto find = BluetoothFindFirstRadio(&parameters, &radio); if (!find) return false;
@@ -56,27 +78,88 @@ bool VerifyPhone(uint64_t address) {
     closesocket(socket); return valid && WaitForSingleObject(stopEvent, 0) != WAIT_OBJECT_0;
 }
 bool IsLogonClient(HANDLE pipe, const Bridge::Request& request) {
+    const bool enrollment = request.intent == Bridge::Intent::Enroll;
     ULONG pid = 0; DWORD session = 0;
     if (!GetNamedPipeClientProcessId(pipe, &pid) || !ProcessIdToSessionId(pid, &session) || session != request.session) return false;
     auto process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid); if (!process) return false;
     wchar_t image[32768]{}, expected[MAX_PATH]{}; DWORD length = _countof(image);
     const bool imageRead = QueryFullProcessImageNameW(process, 0, image, &length) != FALSE;
-    GetSystemDirectoryW(expected, _countof(expected)); wcscat_s(expected, L"\\LogonUI.exe");
+    if (enrollment) {
+        PWSTR folder = nullptr;
+        if (SUCCEEDED(SHGetKnownFolderPath(FOLDERID_ProgramFiles, 0, nullptr, &folder))) { swprintf_s(expected, L"%s\\AudioSwitch Login Lab\\AudioSwitch.LoginBridge.exe", folder); CoTaskMemFree(folder); }
+    } else { GetSystemDirectoryW(expected, _countof(expected)); wcscat_s(expected, L"\\LogonUI.exe"); }
     HANDLE token = nullptr;
     bool valid = imageRead && _wcsicmp(image, expected) == 0 && OpenProcessToken(process, TOKEN_QUERY, &token);
     BYTE storage[512]{}; DWORD bytes = 0;
-    valid = valid && GetTokenInformation(token, TokenUser, storage, sizeof(storage), &bytes) && IsWellKnownSid(reinterpret_cast<TOKEN_USER*>(storage)->User.Sid, WinLocalSystemSid);
+    if (enrollment) {
+        TOKEN_ELEVATION elevation{};
+        valid = valid && GetTokenInformation(token, TokenElevation, &elevation, sizeof(elevation), &bytes) && elevation.TokenIsElevated;
+    } else valid = valid && GetTokenInformation(token, TokenUser, storage, sizeof(storage), &bytes) && IsWellKnownSid(reinterpret_cast<TOKEN_USER*>(storage)->User.Sid, WinLocalSystemSid);
     if (token) CloseHandle(token); CloseHandle(process);
     if (!valid) return false;
     // A real locked session is required; never use this bridge for boot-time autologon or other users.
     PWTSINFOEXW info = nullptr; DWORD infoBytes = 0;
-    valid = WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, session, WTSSessionInfoEx, reinterpret_cast<PWSTR*>(&info), &infoBytes) && infoBytes >= sizeof(WTSINFOEXW) && info->Level == 1 && info->Data.WTSInfoExLevel1.SessionFlags == WTS_SESSIONSTATE_LOCK;
+    valid = enrollment || (WTSQuerySessionInformationW(WTS_CURRENT_SERVER_HANDLE, session, WTSSessionInfoEx, reinterpret_cast<PWSTR*>(&info), &infoBytes) && infoBytes >= sizeof(WTSINFOEXW) && info->Level == 1 && info->Data.WTSInfoExLevel1.SessionFlags == WTS_SESSIONSTATE_LOCK);
     if (info) WTSFreeMemory(info);
     HANDLE userToken = nullptr;
     valid = valid && WTSQueryUserToken(session, &userToken);
     PSID sid = nullptr;
     valid = valid && ConvertStringSidToSidW(request.sid, &sid) && GetTokenInformation(userToken, TokenUser, storage, sizeof(storage), &bytes) && EqualSid(sid, reinterpret_cast<TOKEN_USER*>(storage)->User.Sid);
     if (sid) LocalFree(sid); if (userToken) CloseHandle(userToken); return valid;
+}
+DWORD SaveEnrollment(const Bridge::Request& request, const BYTE* encrypted) {
+    Vault::Record record;
+    if (!Vault::Decrypt(encrypted, request.payloadBytes, record) || wcscmp(record.sid, request.sid) != 0) return ERROR_INVALID_DATA;
+    uint64_t phone = 0; if (!Bridge::ReadBinding(record.sid, &phone) || phone != record.phone) return ERROR_NOT_FOUND;
+    HANDLE user = nullptr;
+    if (!LogonUserW(record.qualified + 17, L"MicrosoftAccount", record.password, LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_WINNT50, &user)) return GetLastError();
+    BYTE tokenData[512]{}; DWORD size = 0; PSID expected = nullptr;
+    const bool matched = ConvertStringSidToSidW(record.sid, &expected) && GetTokenInformation(user, TokenUser, tokenData, sizeof(tokenData), &size) && EqualSid(expected, reinterpret_cast<TOKEN_USER*>(tokenData)->User.Sid);
+    if (expected) LocalFree(expected); CloseHandle(user);
+    if (!matched) return ERROR_NO_SUCH_USER;
+    return Vault::Save(record) ? ERROR_SUCCESS : ERROR_WRITE_FAULT;
+}
+void VerifyRequest(HANDLE pipe, const Bridge::Request& request, Bridge::Response& response) {
+    const auto epoch = InterlockedCompareExchange(&sessionEpoch, 0, 0);
+    if (!IsLogonClient(pipe, request)) { response.result = Bridge::Result::SessionMismatch; return; }
+    if (request.intent == Bridge::Intent::Enroll) {
+        BYTE encrypted[16384]{};
+        if (!Bridge::Transfer(pipe, encrypted, request.payloadBytes, false, stopEvent)) { response.error = ERROR_READ_FAULT; return; }
+        response.error = IsLogonClient(pipe, request) ? SaveEnrollment(request, encrypted) : ERROR_ACCESS_DENIED;
+        SecureZeroMemory(encrypted, sizeof(encrypted));
+        response.result = response.error ? Bridge::Result::Denied : Bridge::Result::Enrolled; return;
+    }
+    uint64_t phone = 0;
+    if (!Bridge::ReadBinding(request.sid, &phone) || !phone) { response.result = Bridge::Result::NotBound; return; }
+    const bool automatic = request.intent != Bridge::Intent::Manual;
+    if (automatic && !Vault::Enabled(request.sid)) return;
+    if (request.intent == Bridge::Intent::AutoCommit) {
+        AcquireSRWLockExclusive(&policyLock); auto state = Policy(request.session);
+        const bool allowed = state && epoch == InterlockedCompareExchange(&sessionEpoch, 0, 0) && state->Commit(request.proof, GetTickCount64(), phone, epoch);
+        if (allowed) response.completed = state->completed;
+        ReleaseSRWLockExclusive(&policyLock);
+        if (allowed) { response.result = Bridge::Result::Verified; response.phone = phone; } return;
+    }
+    if (automatic) {
+        AcquireSRWLockShared(&policyLock); bool attempted = false; for (auto& state : policies) if (state.session == request.session) attempted = state.attempted; ReleaseSRWLockShared(&policyLock);
+        if (attempted) { response.result = Bridge::Result::AlreadyTried; return; }
+    }
+    // No usable adapter / paired identity cannot arm an away-to-near transition.
+    const bool known = Paired(phone);
+    const bool present = known && VerifyPhone(phone);
+    uint64_t current = 0;
+    if (epoch != InterlockedCompareExchange(&sessionEpoch, 0, 0) || !IsLogonClient(pipe, request) || !Bridge::ReadBinding(request.sid, &current) || current != phone) { response.result = Bridge::Result::SessionMismatch; return; }
+    if (!present) {
+        if (automatic && known) { AcquireSRWLockExclusive(&policyLock); auto state = Policy(request.session); if (state) state->Absent(GetTickCount64()); ReleaseSRWLockExclusive(&policyLock); }
+        response.result = Bridge::Result::PhoneUnavailable; return;
+    }
+    if (automatic) {
+        AcquireSRWLockExclusive(&policyLock); auto state = Policy(request.session);
+        const bool ready = state && state->Present(request.nonce, GetTickCount64(), phone, epoch);
+        ReleaseSRWLockExclusive(&policyLock);
+        if (!ready) { response.result = Bridge::Result::Waiting; return; }
+    }
+    response.result = Bridge::Result::Verified; response.phone = phone;
 }
 void Serve() {
     PSECURITY_DESCRIPTOR descriptor = nullptr;
@@ -100,19 +183,9 @@ void Serve() {
             Bridge::Request request; Bridge::Response response;
             if (Bridge::Transfer(pipe, &request, sizeof(request), false, stopEvent) && Bridge::ValidRequest(request)) {
                 response.session = request.session; memcpy(response.nonce, request.nonce, sizeof(response.nonce));
-                const auto epoch = InterlockedCompareExchange(&sessionEpoch, 0, 0);
-                if (!IsLogonClient(pipe, request)) response.result = Bridge::Result::SessionMismatch;
-                else {
-                    uint64_t phone = 0;
-                    if (!Bridge::ReadBinding(request.sid, &phone)) response.result = Bridge::Result::NotBound;
-                    else if (!phone || !VerifyPhone(phone)) response.result = Bridge::Result::PhoneUnavailable;
-                    else {
-                        uint64_t current = 0;
-                        if (epoch == InterlockedCompareExchange(&sessionEpoch, 0, 0) && IsLogonClient(pipe, request) && Bridge::ReadBinding(request.sid, &current) && current == phone) { response.result = Bridge::Result::Verified; response.phone = phone; }
-                        else response.result = Bridge::Result::SessionMismatch;
-                    }
-                }
-                response.completed = GetTickCount64(); Bridge::Transfer(pipe, &response, sizeof(response), true, stopEvent);
+                VerifyRequest(pipe, request, response);
+                if (!response.completed) response.completed = GetTickCount64();
+                if (Bridge::Transfer(pipe, &response, sizeof(response), true, stopEvent)) { BYTE acknowledged[32]{}; Bridge::Transfer(pipe, acknowledged, sizeof(acknowledged), false, stopEvent); }
             }
         }
         DisconnectNamedPipe(pipe); CloseHandle(pipe);
@@ -124,6 +197,11 @@ void WINAPI ServiceMain(DWORD, PWSTR*) {
     stopEvent = CreateEventW(nullptr, TRUE, FALSE, nullptr);
     WSADATA winsock{};
     if (!stopEvent || WSAStartup(MAKEWORD(2, 2), &winsock) != 0) { serviceStatus.dwWin32ExitCode = ERROR_SERVICE_NOT_ACTIVE; Status(SERVICE_STOPPED); if (stopEvent) CloseHandle(stopEvent); return; }
+    HANDLE privilegeToken = nullptr; TOKEN_PRIVILEGES privileges{}; privileges.PrivilegeCount = 1;
+    if (OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, &privilegeToken)) {
+        if (LookupPrivilegeValueW(nullptr, SE_TCB_NAME, &privileges.Privileges[0].Luid)) { privileges.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED; AdjustTokenPrivileges(privilegeToken, FALSE, &privileges, 0, nullptr, nullptr); }
+        CloseHandle(privilegeToken);
+    }
     Status(SERVICE_RUNNING); Serve(); Status(SERVICE_STOP_PENDING); WSACleanup(); CloseHandle(stopEvent); Status(SERVICE_STOPPED);
 }
 int ManageService(PCWSTR operation) {
@@ -176,11 +254,12 @@ int Binding(int argc, wchar_t** argv) {
     if (wcslen(argv[2]) > 183 || wcspbrk(argv[2], L"\\/") || !ConvertStringSidToSidW(argv[2], &sid)) return ERROR_INVALID_SID;
     LocalFree(sid);
     wchar_t path[256]{}; swprintf_s(path, L"%s%s", Bridge::BindingRoot, argv[2]);
-    if (wcscmp(argv[1], L"--unbind") == 0) { const auto error = RegDeleteKeyExW(HKEY_LOCAL_MACHINE, path, KEY_WOW64_64KEY, 0); return error == ERROR_FILE_NOT_FOUND ? ERROR_SUCCESS : static_cast<int>(error); }
+    if (wcscmp(argv[1], L"--unbind") == 0) { Vault::Revoke(argv[2]); const auto error = RegDeleteKeyExW(HKEY_LOCAL_MACHINE, path, KEY_WOW64_64KEY, 0); return error == ERROR_FILE_NOT_FOUND ? ERROR_SUCCESS : static_cast<int>(error); }
     if (argc != 4 || wcslen(argv[3]) != 12) return ERROR_INVALID_PARAMETER;
     uint64_t address = 0;
     for (size_t index = 0; index < 12; ++index) { const auto c = argv[3][index]; unsigned digit; if (c >= L'0' && c <= L'9') digit = c - L'0'; else if (c >= L'A' && c <= L'F') digit = c - L'A' + 10; else if (c >= L'a' && c <= L'f') digit = c - L'a' + 10; else return ERROR_INVALID_PARAMETER; address = (address << 4) | digit; }
     if (!address || !Paired(address)) return ERROR_NOT_FOUND;
+    Vault::Revoke(argv[2]);
     HKEY key = nullptr; auto error = RegCreateKeyExW(HKEY_LOCAL_MACHINE, path, 0, nullptr, 0, KEY_SET_VALUE | KEY_WOW64_64KEY, nullptr, &key, nullptr);
     if (error == ERROR_SUCCESS) { error = RegSetValueExW(key, L"Phone", 0, REG_SZ, reinterpret_cast<const BYTE*>(argv[3]), 13 * sizeof(wchar_t)); RegCloseKey(key); }
     return static_cast<int>(error);
@@ -188,6 +267,11 @@ int Binding(int argc, wchar_t** argv) {
 }
 int wmain(int argc, wchar_t** argv) {
     if (argc == 2 && (wcscmp(argv[1], L"--install-service") == 0 || wcscmp(argv[1], L"--stop-service") == 0 || wcscmp(argv[1], L"--remove-service") == 0)) return ManageService(argv[1]);
+    if (argc == 3 && IsUserAnAdmin() && (wcscmp(argv[1], L"--enroll") == 0 || wcscmp(argv[1], L"--revoke") == 0)) {
+        PSID sid = nullptr; if (wcslen(argv[2]) > 183 || !ConvertStringSidToSidW(argv[2], &sid)) return ERROR_INVALID_SID; LocalFree(sid);
+        if (wcscmp(argv[1], L"--revoke") == 0) { Vault::Revoke(argv[2]); return 0; }
+        return static_cast<int>(EnrollLocalCredential(argv[2]));
+    }
     if (argc > 1) return Binding(argc, argv);
     SERVICE_TABLE_ENTRYW entries[] = {{const_cast<PWSTR>(Bridge::ServiceName), ServiceMain}, {nullptr, nullptr}};
     return StartServiceCtrlDispatcherW(entries) ? 0 : static_cast<int>(GetLastError());

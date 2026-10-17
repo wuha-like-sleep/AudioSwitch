@@ -11,9 +11,13 @@
 #include <new>
 #include "ProviderId.h"
 #include "BridgeClient.h"
+#include "CredentialVault.h"
+#include <thread>
+#include <mutex>
 using Microsoft::WRL::ComPtr;
 namespace {
 LONG objects = 0, locks = 0;
+HINSTANCE moduleInstance = nullptr;
 constexpr DWORD FieldCount = 4, PasswordField = 2;
 HRESULT CopyText(PCWSTR text, PWSTR* output) {
     if (!output) return E_POINTER;
@@ -44,8 +48,13 @@ class Credential final : public ICredentialProviderCredential2 {
     LONG refs = 1;
     PWSTR sid = nullptr, qualified = nullptr;
     Secret password;
+    PhoneApproval automaticApproval{};
+    bool autoReady = false, automaticSubmitted = false, manualEditing = false;
     ComPtr<ICredentialProviderCredentialEvents> events;
 public:
+    PCWSTR Sid() const { return sid; }
+    bool AutomaticReady() const { const auto now = GetTickCount64(); return autoReady && !manualEditing && Vault::Enabled(sid) && now >= automaticApproval.completed && now - automaticApproval.completed <= 2000; }
+    void Ready(const PhoneApproval& approval) { if (!manualEditing) { automaticApproval = approval; autoReady = true; } }
     Credential() { InterlockedIncrement(&objects); }
     ~Credential() { CoTaskMemFree(sid); CoTaskMemFree(qualified); InterlockedDecrement(&objects); }
     HRESULT Initialize(ICredentialProviderUser* user) {
@@ -70,7 +79,7 @@ public:
     IFACEMETHODIMP UnAdvise() override { events.Reset(); return S_OK; }
     IFACEMETHODIMP SetSelected(BOOL* automatic) override { if (!automatic) return E_POINTER; *automatic = FALSE; return S_OK; }
     IFACEMETHODIMP SetDeselected() override {
-        password.Clear();
+        password.Clear(); manualEditing = false;
         if (events) events->SetFieldString(this, PasswordField, L"");
         return S_OK;
     }
@@ -84,7 +93,7 @@ public:
         if (!text) return E_POINTER; *text = nullptr;
         switch (id) {
         case 0: return CopyText(L"AudioSwitch 登录实验", text);
-        case 1: return CopyText(L"账户密码提交；已绑定时需现场验证手机。尚未启用自动解锁。", text);
+        case 1: return CopyText(L"已初始化时可在手机恢复验证后自动提交；PIN / Hello 继续使用系统入口。", text);
         case 2: return CopyText(password.text ? password.text : L"", text);
         case 3: return CopyText(L"登录", text);
         default: return E_INVALIDARG;
@@ -98,6 +107,7 @@ public:
     IFACEMETHODIMP SetStringValue(DWORD id, PCWSTR value) override {
         if (id != PasswordField || !value) return E_INVALIDARG;
         if (wcslen(value) > 1024) return E_INVALIDARG;
+        manualEditing = *value != 0; autoReady = false;
         return password.Set(value);
     }
     IFACEMETHODIMP SetCheckboxValue(DWORD, BOOL) override { return E_NOTIMPL; }
@@ -107,8 +117,18 @@ public:
     IFACEMETHODIMP GetSerialization(CREDENTIAL_PROVIDER_GET_SERIALIZATION_RESPONSE* response, CREDENTIAL_PROVIDER_CREDENTIAL_SERIALIZATION* serialized, PWSTR* status, CREDENTIAL_PROVIDER_STATUS_ICON* icon) override {
         if (!response || !serialized || !status || !icon) return E_POINTER;
         *response = CPGSR_NO_CREDENTIAL_NOT_FINISHED; *serialized = {}; *status = nullptr; *icon = CPSI_NONE;
+        const bool automatic = AutomaticReady() && (!password.text || !*password.text);
+        autoReady = false;
+        Vault::Record saved;
+        if (automatic) {
+            if (!CommitAutomatic(sid, automaticApproval)) { SetDeselected(); *icon = CPSI_WARNING; return CopyText(L"手机证明已失效，未提交凭据。可继续使用 PIN / Windows Hello。", status); }
+            if (!Vault::Load(sid, qualified, saved) || FAILED(password.Set(saved.password))) {
+                Vault::Revoke(sid); SetDeselected(); *icon = CPSI_WARNING; return CopyText(L"本机凭据不可用，已停用自动提交。请使用 PIN / Windows Hello 并重新初始化。", status);
+            }
+            automaticSubmitted = true;
+        }
         if (!password.text || !*password.text) { *icon = CPSI_WARNING; return CopyText(L"请输入微软账户密码；请勿输入 PIN。", status); }
-        if (!VerifyBoundPhone(sid)) {
+        if (!automatic && !VerifyBoundPhone(sid)) {
             SetDeselected(); *icon = CPSI_WARNING;
             return CopyText(L"未取得绑定手机的新鲜认证结果，已停止提交并清除密码。请检查手机和 AudioSwitch 登录桥接服务，或切回系统 PIN / Windows Hello。", status);
         }
@@ -136,6 +156,8 @@ public:
     IFACEMETHODIMP ReportResult(NTSTATUS statusCode, NTSTATUS, PWSTR* status, CREDENTIAL_PROVIDER_STATUS_ICON* icon) override {
         if (!status || !icon) return E_POINTER;
         *status = nullptr; *icon = CPSI_NONE; SetDeselected();
+        if (automaticSubmitted && statusCode < 0) Vault::Revoke(sid);
+        automaticSubmitted = false;
         if (statusCode < 0) { *icon = CPSI_ERROR; return CopyText(L"Windows 未接受该凭据。请使用其他登录选项中的 PIN / Windows Hello。", status); }
         return S_OK;
     }
@@ -147,7 +169,57 @@ class Provider final : public ICredentialProvider, public ICredentialProviderSet
     std::array<ComPtr<Credential>, 64> credentials;
     DWORD count = 0;
     bool enumerated = false;
-    void Clear() { for (auto& value : credentials) value.Reset(); count = 0; enumerated = false; }
+    ComPtr<ICredentialProviderEvents> providerEvents;
+    UINT_PTR adviseContext = 0;
+    HWND notification = nullptr; HANDLE stop = nullptr;
+    std::thread worker;
+    struct Target { wchar_t sid[184]{}; DWORD index = 0; };
+    std::mutex pendingLock;
+    bool pending = false; DWORD readyIndex = 0; PhoneApproval readyProof{};
+    static LRESULT CALLBACK WindowProc(HWND window, UINT message, WPARAM w, LPARAM l) {
+        if (message == WM_NCCREATE) SetWindowLongPtrW(window, GWLP_USERDATA, reinterpret_cast<LONG_PTR>(reinterpret_cast<CREATESTRUCTW*>(l)->lpCreateParams));
+        auto self = reinterpret_cast<Provider*>(GetWindowLongPtrW(window, GWLP_USERDATA));
+        if (self && message == WM_APP + 71) { self->NotifyReady(); return 0; }
+        return DefWindowProcW(window, message, w, l);
+    }
+    void NotifyReady() {
+        DWORD index; PhoneApproval proof;
+        { std::lock_guard<std::mutex> guard(pendingLock); if (!pending) return; index = readyIndex; proof = readyProof; pending = false; }
+        if (index < count && providerEvents) { credentials[index]->Ready(proof); if (credentials[index]->AutomaticReady()) providerEvents->CredentialsChanged(adviseContext); }
+    }
+    void StopWorker() {
+        if (stop) SetEvent(stop); if (worker.joinable()) worker.join();
+        if (notification) DestroyWindow(notification); notification = nullptr;
+        if (stop) CloseHandle(stop); stop = nullptr;
+        UnregisterClassW(L"AudioSwitch.LoginProvider.Events", moduleInstance);
+        std::lock_guard<std::mutex> guard(pendingLock); pending = false;
+    }
+    void StartWorker() {
+        if (worker.joinable() || !enumerated || !count || !providerEvents) return;
+        std::array<Target, 64> targets{}; const DWORD targetCount = count;
+        for (DWORD index = 0; index < count; ++index) { wcsncpy_s(targets[index].sid, credentials[index]->Sid(), _TRUNCATE); targets[index].index = index; }
+        WNDCLASSW definition{}; definition.lpfnWndProc = WindowProc; definition.hInstance = moduleInstance; definition.lpszClassName = L"AudioSwitch.LoginProvider.Events";
+        if (!RegisterClassW(&definition) && GetLastError() != ERROR_CLASS_ALREADY_EXISTS) return;
+        notification = CreateWindowExW(0, definition.lpszClassName, L"", 0, 0, 0, 0, 0, HWND_MESSAGE, nullptr, moduleInstance, this);
+        stop = CreateEventW(nullptr, TRUE, FALSE, nullptr);
+        if (!notification || !stop) { StopWorker(); return; }
+        try {
+            worker = std::thread([this, targets, targetCount] {
+                while (WaitForSingleObject(stop, 0) != WAIT_OBJECT_0) {
+                    for (DWORD index = 0; index < targetCount && WaitForSingleObject(stop, 0) != WAIT_OBJECT_0; ++index) {
+                        if (!Vault::Enabled(targets[index].sid)) continue;
+                        PhoneApproval proof;
+                        if (ProbeAutomatic(targets[index].sid, proof, stop)) {
+                            { std::lock_guard<std::mutex> guard(pendingLock); readyIndex = targets[index].index; readyProof = proof; pending = true; }
+                            PostMessageW(notification, WM_APP + 71, 0, 0);
+                        }
+                    }
+                    if (WaitForSingleObject(stop, 3000) == WAIT_OBJECT_0) break;
+                }
+            });
+        } catch (...) { StopWorker(); }
+    }
+    void Clear() { StopWorker(); for (auto& value : credentials) value.Reset(); count = 0; enumerated = false; }
     HRESULT Enumerate() {
         if (enumerated) return S_OK;
         if (!users || (scenario != CPUS_LOGON && scenario != CPUS_UNLOCK_WORKSTATION)) return S_OK;
@@ -163,7 +235,7 @@ class Provider final : public ICredentialProvider, public ICredentialProviderSet
             if (FAILED(hr)) { Clear(); return hr; }
             credentials[count++] = credential;
         }
-        enumerated = true; return S_OK;
+        enumerated = true; StartWorker(); return S_OK;
     }
 public:
     Provider() { InterlockedIncrement(&objects); }
@@ -183,8 +255,8 @@ public:
         scenario = value; return S_OK;
     }
     IFACEMETHODIMP SetSerialization(const CREDENTIAL_PROVIDER_CREDENTIAL_SERIALIZATION*) override { return E_NOTIMPL; }
-    IFACEMETHODIMP Advise(ICredentialProviderEvents*, UINT_PTR) override { return S_OK; }
-    IFACEMETHODIMP UnAdvise() override { return S_OK; }
+    IFACEMETHODIMP Advise(ICredentialProviderEvents* value, UINT_PTR context) override { StopWorker(); providerEvents = value; adviseContext = context; StartWorker(); return S_OK; }
+    IFACEMETHODIMP UnAdvise() override { StopWorker(); providerEvents.Reset(); return S_OK; }
     IFACEMETHODIMP GetFieldDescriptorCount(DWORD* value) override { if (!value) return E_POINTER; *value = FieldCount; return S_OK; }
     IFACEMETHODIMP GetFieldDescriptorAt(DWORD id, CREDENTIAL_PROVIDER_FIELD_DESCRIPTOR** output) override {
         if (!output) return E_POINTER; *output = nullptr;
@@ -201,7 +273,9 @@ public:
     IFACEMETHODIMP GetCredentialCount(DWORD* value, DWORD* defaultIndex, BOOL* automatic) override {
         if (!value || !defaultIndex || !automatic) return E_POINTER;
         *value = 0; *defaultIndex = CREDENTIAL_PROVIDER_NO_DEFAULT; *automatic = FALSE;
-        auto hr = Enumerate(); if (SUCCEEDED(hr)) *value = count; return hr;
+        auto hr = Enumerate();
+        if (SUCCEEDED(hr)) { *value = count; for (DWORD index = 0; index < count; ++index) if (credentials[index]->AutomaticReady()) { *defaultIndex = index; *automatic = TRUE; break; } }
+        return hr;
     }
     IFACEMETHODIMP GetCredentialAt(DWORD index, ICredentialProviderCredential** value) override {
         if (!value) return E_POINTER; *value = nullptr;
@@ -227,6 +301,7 @@ public:
     IFACEMETHODIMP LockServer(BOOL lock) override { if (lock) InterlockedIncrement(&locks); else InterlockedDecrement(&locks); return S_OK; }
 };
 }
+BOOL WINAPI DllMain(HINSTANCE module, DWORD reason, LPVOID) { if (reason == DLL_PROCESS_ATTACH) moduleInstance = module; return TRUE; }
 extern "C" HRESULT __stdcall DllCanUnloadNow() { return objects == 0 && locks == 0 ? S_OK : S_FALSE; }
 extern "C" HRESULT __stdcall DllGetClassObject(REFCLSID clsid, REFIID iid, void** value) {
     if (!value) return E_POINTER; *value = nullptr;

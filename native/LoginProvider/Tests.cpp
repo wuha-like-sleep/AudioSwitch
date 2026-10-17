@@ -12,6 +12,9 @@
 #include <algorithm>
 #include "ProviderId.h"
 #include "BridgeProtocol.h"
+#include "CredentialVault.h"
+#include "AutoPolicy.h"
+#include <sddl.h>
 using Microsoft::WRL::ComPtr;
 void Check(bool value, const char* message) { if (!value) throw std::runtime_error(message); }
 class User final : public ICredentialProviderUser {
@@ -113,6 +116,50 @@ void Verify(IClassFactory* factory, bool denyBound) {
         credential->GetStringValue(2, &remaining); Check(!*remaining, "Failure clears password"); CoTaskMemFree(remaining);
     }
 }
+void VerifyVault() {
+    constexpr wchar_t testSid[] = L"S-1-5-21-100-200-300-1001";
+    constexpr wchar_t bindingPath[] = L"SOFTWARE\\AudioSwitch\\LoginBridge\\Bindings\\S-1-5-21-100-200-300-1001";
+    HKEY binding = nullptr;
+    Check(RegCreateKeyExW(HKEY_LOCAL_MACHINE, bindingPath, 0, nullptr, 0, KEY_ALL_ACCESS | KEY_WOW64_64KEY, nullptr, &binding, nullptr) == ERROR_SUCCESS, "Create isolated vault binding");
+    constexpr wchar_t phone[] = L"123456789ABC";
+    RegSetValueExW(binding, L"Phone", 0, REG_SZ, reinterpret_cast<const BYTE*>(phone), sizeof(phone)); RegCloseKey(binding);
+    Vault::Record input; wcscpy_s(input.sid, testSid); wcscpy_s(input.qualified, L"MicrosoftAccount\\audioswitch-test@example.invalid"); wcscpy_s(input.password, L"vault-test-only-47!"); input.phone = 0x123456789ABC;
+    Check(Vault::Save(input) && Vault::Enabled(testSid), "Save DPAPI vault and opt-in marker");
+    Vault::Record output;
+    Check(Vault::Load(testSid, input.qualified, output) && wcscmp(input.password, output.password) == 0, "Vault protected roundtrip");
+    Check(!Vault::Load(testSid, L"MicrosoftAccount\\other@example.invalid", output), "Wrong account cannot load vault");
+    HKEY secretKey = nullptr; constexpr wchar_t path[] = L"SOFTWARE\\AudioSwitch\\LoginBridge\\Vault\\S-1-5-21-100-200-300-1001";
+    Check(RegOpenKeyExW(HKEY_LOCAL_MACHINE, path, 0, KEY_ALL_ACCESS | KEY_WOW64_64KEY, &secretKey) == ERROR_SUCCESS, "Open isolated vault key");
+    BYTE encrypted[16384]{}; DWORD bytes = sizeof(encrypted), type = 0;
+    Check(RegQueryValueExW(secretKey, L"Secret", nullptr, &type, encrypted, &bytes) == ERROR_SUCCESS, "Read encrypted test secret");
+    const auto first = reinterpret_cast<const BYTE*>(input.password); const auto last = first + wcslen(input.password) * sizeof(wchar_t);
+    Check(std::search(encrypted, encrypted + bytes, first, last) == encrypted + bytes, "Vault has no plaintext test password");
+    HANDLE processToken = nullptr, restricted = nullptr;
+    Check(OpenProcessToken(GetCurrentProcess(), TOKEN_DUPLICATE | TOKEN_QUERY, &processToken) != FALSE, "Open test token");
+    PSID users = nullptr; Check(ConvertStringSidToSidW(L"S-1-5-32-545", &users) != FALSE, "Users SID"); SID_AND_ATTRIBUTES restriction{users, 0};
+    Check(CreateRestrictedToken(processToken, DISABLE_MAX_PRIVILEGE, 0, nullptr, 0, nullptr, 1, &restriction, &restricted) != FALSE, "Restricted test token");
+    Check(ImpersonateLoggedOnUser(restricted) != FALSE, "Restricted impersonation");
+    HKEY denied = nullptr; const auto read = RegOpenKeyExW(HKEY_LOCAL_MACHINE, path, 0, KEY_QUERY_VALUE | KEY_WOW64_64KEY, &denied);
+    RevertToSelf(); if (denied) RegCloseKey(denied); CloseHandle(restricted); CloseHandle(processToken); LocalFree(users);
+    Check(read == ERROR_ACCESS_DENIED, "Restricted user cannot read vault ciphertext");
+    encrypted[bytes / 2] ^= 1; RegSetValueExW(secretKey, L"Secret", 0, REG_BINARY, encrypted, bytes); RegCloseKey(secretKey); SecureZeroMemory(encrypted, sizeof(encrypted));
+    Check(!Vault::Load(testSid, input.qualified, output), "Tampered vault rejected");
+    Vault::Revoke(testSid); Check(!Vault::Enabled(testSid) && !Vault::Load(testSid, input.qualified, output), "Revocation disables loading");
+    RegDeleteKeyExW(HKEY_LOCAL_MACHINE, bindingPath, KEY_WOW64_64KEY, 0);
+    std::cout << "DPAPI roundtrip, restricted registry access, identity mismatch, ciphertext tampering and revocation checks passed with fictional credentials.\n";
+}
+void VerifyAutoPolicy() {
+    BYTE nonce[32]{}; nonce[0] = 1;
+    Bridge::AutoPolicy policy;
+    Check(!policy.Present(nonce, 1000, 7, 2), "Phone initially present cannot immediately unlock");
+    policy.Absent(1000); policy.Absent(5000); Check(!policy.Present(nonce, 6000, 7, 2), "Short departure cannot arm");
+    policy.Absent(10000); policy.Absent(16000); policy.Absent(23000);
+    Check(policy.Present(nonce, 24000, 7, 2), "Sustained failed checks followed by return can arm");
+    Check(!policy.Commit(nonce, 24001, 8, 2) && !policy.Commit(nonce, 24001, 7, 3), "Other binding or lock generation rejected");
+    Check(!policy.Commit(nonce, 26001, 7, 2), "Expired automatic approval rejected");
+    Check(policy.Present(nonce, 27000, 7, 2) && policy.Commit(nonce, 27001, 7, 2), "Fresh proof commits once");
+    Check(!policy.Commit(nonce, 27002, 7, 2) && !policy.Present(nonce, 28000, 7, 2), "Same lock cannot automatically retry");
+}
 int wmain(int argc, wchar_t** argv) {
     if (argc != 2 && argc != 3) return 2;
     const bool denyBound = argc == 3 && wcscmp(argv[2], L"--deny-bound") == 0;
@@ -124,6 +171,8 @@ int wmain(int argc, wchar_t** argv) {
     auto canUnload = reinterpret_cast<CanUnload>(GetProcAddress(library, "DllCanUnloadNow"));
     int result = 0;
     try {
+        VerifyAutoPolicy();
+        if (argc == 3 && wcscmp(argv[2], L"--vault-tests") == 0) VerifyVault();
         Check(getFactory && canUnload && canUnload() == S_OK, "Exports and initial unload");
         {
             ComPtr<IClassFactory> factory; Check(SUCCEEDED(getFactory(AudioSwitchLoginProviderId, IID_PPV_ARGS(&factory))), "Class factory");

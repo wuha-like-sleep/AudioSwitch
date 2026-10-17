@@ -32,6 +32,8 @@ try {
     if (Compare-Object $before $after) { throw 'Existing system provider registrations changed' }
     & $test $registered
     if ($LASTEXITCODE -ne 0) { throw 'Installed provider loading failed' }
+    & $test $registered '--vault-tests'
+    if ($LASTEXITCODE -ne 0) { throw 'Protected vault and automatic policy checks failed' }
     # A synthetic admin-created binding cannot turn a regular process into LogonUI.
     $binding = 'HKLM:\SOFTWARE\AudioSwitch\LoginBridge\Bindings\S-1-5-21-100-200-300-1001'
     try {
