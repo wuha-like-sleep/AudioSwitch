@@ -7,8 +7,8 @@ internal sealed class SettingsForm : Form
     private static readonly Color Accent = Color.FromArgb(57, 91, 237);
     private readonly ComboBox headphones = DevicePicker();
     private readonly ComboBox speakers = DevicePicker();
-    private readonly CheckBox startup = new() { Text = "登录 Windows 后自动启动", AutoSize = true };
-    private readonly CheckBox autoUpdate = new() { Text = "启动时检查新版本", AutoSize = true };
+    private readonly Toggle startup = new() { Text = "登录 Windows 后自动启动" };
+    private readonly Toggle autoUpdate = new() { Text = "启动时检查新版本" };
     private uint modifiers;
     private Keys hotkey;
     public Settings? Selection { get; private set; }
@@ -21,7 +21,7 @@ internal sealed class SettingsForm : Form
         Font = new Font("Microsoft YaHei UI", 10);
         ForeColor = Ink; BackColor = Color.FromArgb(243, 246, 251);
         AutoScaleMode = AutoScaleMode.Dpi;
-        ClientSize = new Size(760, 690); MinimumSize = new Size(760, 720);
+        ClientSize = new Size(820, 740); MinimumSize = new Size(836, 779);
         StartPosition = FormStartPosition.CenterScreen;
         modifiers = settings?.HotkeyModifiers ?? 3; hotkey = settings?.HotkeyKey ?? Keys.F11;
         startup.Checked = StartupService.Enabled;
@@ -29,10 +29,12 @@ internal sealed class SettingsForm : Form
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, Padding = new Padding(28), AutoScroll = true };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        foreach (int height in new[] { 108, 58, 168, 156, 80, 64 }) root.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
-        var hero = new Panel { Dock = DockStyle.Fill, BackColor = Ink, Padding = new Padding(22), Margin = new Padding(0, 0, 0, 18) };
-        hero.Controls.Add(new Label { Text = "你的声音，随手切换。   /   开发者 wuha-like-sleep", ForeColor = Color.FromArgb(194, 204, 225), Location = new Point(24, 53), AutoSize = true });
-        hero.Controls.Add(new Label { Text = "AudioSwitch", ForeColor = Color.White, Font = new Font("Segoe UI", 23, FontStyle.Bold), Location = new Point(20, 10), AutoSize = true });
+        foreach (int height in new[] { 124, 64, 176, 168, 84, 68 }) root.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
+        var hero = new RoundedPanel { Dock = DockStyle.Fill, SurfaceColor = Ink, Padding = new Padding(22), Margin = new Padding(0, 0, 0, 18) };
+        hero.Controls.Add(new Label { Text = "你的声音，随手切换。   /   开发者 wuha-like-sleep", ForeColor = Color.FromArgb(194, 204, 225), BackColor = Ink, Location = new Point(86, 62), AutoSize = true });
+        hero.Controls.Add(new Label { Text = "AudioSwitch", ForeColor = Color.White, BackColor = Ink, Font = new Font("Segoe UI", 24, FontStyle.Bold), Location = new Point(82, 14), AutoSize = true });
+        using var brandIcon = BrandIcon.Load();
+        hero.Controls.Add(new PictureBox { Image = brandIcon.ToBitmap(), SizeMode = PictureBoxSizeMode.Zoom, Size = new Size(44, 44), Location = new Point(24, 26), BackColor = Ink });
         var badge = new Label { Text = "WINDOWS 10 / 11", ForeColor = Color.FromArgb(184, 201, 255), BackColor = Color.FromArgb(42, 55, 81), AutoSize = true, Padding = new Padding(10, 6, 10, 6), Anchor = AnchorStyles.Top | AnchorStyles.Right };
         hero.Controls.Add(badge);
         hero.Resize += (_, _) => badge.Location = new Point(hero.ClientSize.Width - badge.Width - 22, 26);
@@ -43,7 +45,8 @@ internal sealed class SettingsForm : Form
         cards.Controls.Add(DeviceCard("耳机", "专注时刻 · 你的私人声场", headphones), 0, 0);
         cards.Controls.Add(DeviceCard("音箱", "放松时刻 · 让声音充满空间", speakers), 1, 0);
         root.Controls.Add(cards, 0, 2);
-        var options = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(18), ColumnCount = 2, RowCount = 3, Margin = new Padding(0, 12, 0, 0) };
+        var optionSurface = new RoundedPanel { Dock = DockStyle.Fill, Padding = new Padding(20), Margin = new Padding(0, 16, 0, 0) };
+        var options = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = Padding.Empty, ColumnCount = 2, RowCount = 3, Margin = Padding.Empty };
         options.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45)); options.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
         options.RowStyles.Add(new RowStyle(SizeType.Absolute, 35)); options.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); options.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         options.Controls.Add(new Label { Text = "02   按你的习惯设置", AutoSize = true, Font = new Font(Font, FontStyle.Bold) }, 0, 0); options.SetColumnSpan(options.GetControlFromPosition(0, 0)!, 2);
@@ -57,7 +60,8 @@ internal sealed class SettingsForm : Form
         };
         options.Controls.Add(capture, 1, 1);
         options.Controls.Add(startup, 0, 2); options.Controls.Add(autoUpdate, 1, 2);
-        root.Controls.Add(options, 0, 3);
+        optionSurface.Controls.Add(options);
+        root.Controls.Add(optionSurface, 0, 3);
         root.Controls.Add(new Label { Text = "点击快捷键框后，按 Ctrl / Alt + 字母、数字或 F1–F11，可加 Shift。\n切换播放与通信输出，麦克风保持原设置。保存后即可在托盘使用。", ForeColor = Muted, Dock = DockStyle.Fill, Padding = new Padding(0, 16, 0, 0) }, 0, 4);
         var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false, Margin = Padding.Empty };
         var save = ActionButton("保存设置", true);
@@ -79,20 +83,19 @@ internal sealed class SettingsForm : Form
             Selection = new Settings(h.Id, s.Id, modifiers, hotkey, autoUpdate.Checked); DialogResult = DialogResult.OK;
         };
     }
-    private static ComboBox DevicePicker() => new() { DropDownStyle = ComboBoxStyle.DropDownList, Dock = DockStyle.Top, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(242, 245, 251), DropDownWidth = 480 };
+    private static ComboBox DevicePicker() => new DeviceComboBox();
     private Panel DeviceCard(string title, string subtitle, ComboBox picker)
     {
-        var card = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(18), Margin = new Padding(0, 0, title == "耳机" ? 12 : 0, 0) };
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 3 };
+        var card = new RoundedPanel { Dock = DockStyle.Fill, SurfaceColor = Color.White, Padding = new Padding(18), Margin = new Padding(0, 0, title == "耳机" ? 12 : 0, 0) };
+        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent, ColumnCount = 1, RowCount = 3 };
         layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.Controls.Add(new Label { Text = title, ForeColor = Accent, Font = new Font(Font.FontFamily, 15, FontStyle.Bold), AutoSize = true }, 0, 0);
-        layout.Controls.Add(new Label { Text = subtitle, ForeColor = Muted, AutoSize = true }, 0, 1);
+        layout.Controls.Add(new Label { Text = title, BackColor = Color.White, ForeColor = Accent, Font = new Font(Font.FontFamily, 15, FontStyle.Bold), AutoSize = true }, 0, 0);
+        layout.Controls.Add(new Label { Text = subtitle, BackColor = Color.White, ForeColor = Muted, AutoSize = true }, 0, 1);
         layout.Controls.Add(picker, 0, 2); card.Controls.Add(layout); return card;
     }
     private static Button ActionButton(string text, bool primary)
     {
-        var button = new Button { Text = text, Size = new Size(126, 42), FlatStyle = FlatStyle.Flat, BackColor = primary ? Accent : Color.White, ForeColor = primary ? Color.White : Ink, Cursor = Cursors.Hand, Margin = new Padding(10, 8, 0, 0), UseVisualStyleBackColor = false };
-        button.FlatAppearance.BorderSize = 0; return button;
+        return new ThemeButton { Text = text, Primary = primary, Size = new Size(132, 46), Font = new Font("Microsoft YaHei UI", 10, primary ? FontStyle.Bold : FontStyle.Regular), Margin = new Padding(12, 8, 0, 0) };
     }
     private void Fill(List<OutputDevice> devices, string? h, string? s)
     {
