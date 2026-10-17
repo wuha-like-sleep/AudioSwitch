@@ -126,7 +126,15 @@ internal sealed class LoginComponentForm : ChromeForm
         autoActions.Controls.AddRange([initialize, revoke]); root.Controls.Add(autoActions, 0, 4);
         var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false };
         var close = Button("关闭", false); close.Click += (_, _) => Close();
-        var download = Button("获取实验组件", true); download.Click += (_, _) => Open("https://github.com/" + UpdateService.Repository + "/releases/tag/v" + UpdateService.CurrentTag);
+        var closing = new CancellationTokenSource();
+        FormClosing += (_, _) => closing.Cancel();
+        var download = Button("下载并安装组件", true);
+        download.Click += async (_, _) =>
+        {
+            download.Enabled = bind.Enabled = unbind.Enabled = initialize.Enabled = revoke.Enabled = false;
+            try { await LoginComponentInstaller.InstallAsync(this, closing.Token); if (!IsDisposed) RefreshReport(); }
+            finally { if (!IsDisposed) { download.Enabled = unbind.Enabled = initialize.Enabled = revoke.Enabled = true; bind.Enabled = phoneId.Length > 0; } }
+        };
         var options = Button("系统登录选项", false); options.Click += (_, _) => Open("ms-settings:signinoptions");
         footer.Controls.AddRange([close, download, options]); root.Controls.Add(footer, 0, 5); Controls.Add(root); root.BringToFront();
         CancelButton = close; Shown += (_, _) => { report.Select(0, 0); close.Focus(); };

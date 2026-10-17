@@ -155,6 +155,21 @@ internal static class SettingsStore
             || UpdateService.CancellationMessage(false, false, true, true) != null
             || UpdateService.CancellationMessage(true, false, false, false) != null)
             throw new InvalidOperationException("Update timeout and cancellation feedback failed.");
+        using (var component = JsonDocument.Parse(JsonSerializer.Serialize(new
+        {
+            draft = false, tag_name = "v0.0.1-preview.1",
+            assets = new[] { new { name = "AudioSwitch-LoginLab-Setup-win-arm64.exe", digest = "sha256:" + new string('a', 64), browser_download_url = "https://github.com/test/project/releases/download/v0.0.1-preview.1/AudioSwitch-LoginLab-Setup-win-arm64.exe" } }
+        })))
+        {
+            var asset = LoginComponentInstaller.SelectAsset(component.RootElement, "test/project", "0.0.1-preview.1", "win-arm64");
+            if (asset.Digest.Length != 64) throw new InvalidOperationException("Component digest selection failed.");
+            foreach (var (repository, tag, runtime) in new[] { ("other/project", "0.0.1-preview.1", "win-arm64"), ("test/project", "0.0.2", "win-arm64"), ("test/project", "0.0.1-preview.1", "win-x64") })
+            {
+                bool rejected = false;
+                try { LoginComponentInstaller.SelectAsset(component.RootElement, repository, tag, runtime); } catch (InvalidOperationException) { rejected = true; }
+                if (!rejected) throw new InvalidOperationException("Mismatched component source/version/architecture was accepted.");
+            }
+        }
         string diagnostic = Diagnostics.Build(second, true);
         if (!diagnostic.Contains(UpdateService.CurrentTag) || diagnostic.Contains(second.Headphones) || diagnostic.Contains(second.Speakers))
             throw new InvalidOperationException("Diagnostics version or device identifier privacy failed.");

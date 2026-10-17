@@ -10,7 +10,7 @@
 一个快捷键，循环切换 USB、蓝牙、HDMI 等输出设备。
 
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-465CE8?logo=windows&logoColor=white)](#安装)
-[![Release](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-v0.3.7--preview.1-465CE8)](https://github.com/wuha-like-sleep/AudioSwitch/releases)
+[![Release](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-v0.3.8--preview.1-465CE8)](https://github.com/wuha-like-sleep/AudioSwitch/releases)
 [![Build](https://github.com/wuha-like-sleep/AudioSwitch/actions/workflows/build.yml/badge.svg)](https://github.com/wuha-like-sleep/AudioSwitch/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/License-MIT-22A77A)](LICENSE)
 
@@ -91,9 +91,9 @@
 
 | 你的电脑 | 下载 |
 | :--- | :--- |
-| Intel / AMD 64 位电脑 · 大多数用户选择此项 | **[Windows x64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.7-preview.1/AudioSwitch-Setup-win-x64.exe)** |
-| Windows ARM64 电脑 | [Windows ARM64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.7-preview.1/AudioSwitch-Setup-win-arm64.exe) |
-| Windows 10 32 位电脑 | [Windows x86](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.7-preview.1/AudioSwitch-Setup-win-x86.exe) |
+| Intel / AMD 64 位电脑 · 大多数用户选择此项 | **[Windows x64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.8-preview.1/AudioSwitch-Setup-win-x64.exe)** |
+| Windows ARM64 电脑 | [Windows ARM64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.8-preview.1/AudioSwitch-Setup-win-arm64.exe) |
+| Windows 10 32 位电脑 | [Windows x86](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.8-preview.1/AudioSwitch-Setup-win-x86.exe) |
 
 运行安装向导，选择安装位置、自启动和桌面快捷方式。程序默认安装到当前用户目录，安装完成后从开始菜单打开 **AudioSwitch**。
 
@@ -110,7 +110,7 @@
 | 无密码微软账户、组织账户、本地账户 | 本次实验不支持，继续使用原有系统登录方式 |
 | iPhone 靠近自动解锁 | 自动提交实验代码已实现；真实 iPhone 和锁定会话成功解锁未验证 |
 
-在 **[0.3.7 实验版下载页](https://github.com/wuha-like-sleep/AudioSwitch/releases/tag/v0.3.7-preview.1)** 选择匹配系统原生架构的 `AudioSwitch-LoginLab-Setup-win-*.exe`。安装后从应用“离开锁屏 → 解锁检测 → 登录组件”绑定已配对手机，需要管理员确认，即时生效。绑定模式只用于同一用户已登录后锁定的会话。在 Windows 登录页的“登录选项”中选择“AudioSwitch 登录实验”，未初始化时仍需手动输入微软账户密码；手机验证失败会停止提交并清除本次内存密码，切回原有 PIN / Hello 即可。未绑定时保留手动密码实验模式。未初始化时，手动输入的密码不持久化；显式初始化后，账户密码经本机服务验证 SID，采用机器 DPAPI 加密并保存在仅 SYSTEM / 管理员可读的注册表键中。管理员仍可访问，不能把机器 DPAPI 单独当作用户隔离。不要把 PIN 当账户密码，也不要向开发者发送任何登录凭据。
+应用内进入“离开锁屏 → 解锁检测 → 登录组件”，点击“下载并安装组件”，即可下载同版本、匹配 Windows 原生架构的组件，经 SHA-256 校验后打开管理员安装向导。支持取消下载及失败提示。安装不会自动绑定、初始化或启用解锁。也可以在 **[0.3.8 实验版下载页](https://github.com/wuha-like-sleep/AudioSwitch/releases/tag/v0.3.8-preview.1)** 选择匹配系统原生架构的 `AudioSwitch-LoginLab-Setup-win-*.exe`。安装后从应用“离开锁屏 → 解锁检测 → 登录组件”绑定已配对手机，需要管理员确认，即时生效。绑定模式只用于同一用户已登录后锁定的会话。在 Windows 登录页的“登录选项”中选择“AudioSwitch 登录实验”，未初始化时仍需手动输入微软账户密码；手机验证失败会停止提交并清除本次内存密码，切回原有 PIN / Hello 即可。未绑定时保留手动密码实验模式。未初始化时，手动输入的密码不持久化；显式初始化后，账户密码经本机服务验证 SID，采用机器 DPAPI 加密并保存在仅 SYSTEM / 管理员可读的注册表键中。管理员仍可访问，不能把机器 DPAPI 单独当作用户隔离。不要把 PIN 当账户密码，也不要向开发者发送任何登录凭据。
 
 卸载 Windows“已安装的应用”中的 **AudioSwitch 登录实验组件** 可移除它自己的注册、桥接服务、绑定和加密凭据，可能需要重启释放 DLL。独立卸载音频切换程序不会卸载该实验组件。[开发与验证范围](docs/DEVELOPMENT.md)
 

@@ -145,3 +145,7 @@ CI 检查虚构记录的 DPAPI 往返、密文不含测试密码、受限令牌�
 修正磁贴 SetSelected 始终返回 FALSE 的行为：仅 AutomaticReady 的短时许可有效且没有手动编辑时请求自动提交，与 GetCredentialCount 条件一致。[Microsoft SetSelected 文档](https://learn.microsoft.com/en-us/windows/win32/api/credentialprovider/nf-credentialprovider-icredentialprovidercredential-setselected) 明确系统仍可能展示登录按钮，不能承诺任何系统策略下都无需确认。
 
 0.3.7 Preview 1 发行代码：`4120246550dec2ca2ae25f36605b6f88e27f496f`。[Windows CI 39026758882](https://github.com/wuha-like-sleep/AudioSwitch/actions/runs/39026758882) 三架构构建成功；x64 安装、系统登录入口保留、服务和存储检查，以及诊断状态 / 子状态保存、ReportResult 空输出回归测试通过。真机自动解锁仍待验证。
+
+### 0.3.8：应用内安装登录组件
+
+登录组件页面直接获取当前版本 GitHub Release 的原生系统架构 LoginLab 安装包，校验项目、版本、文件名及 SHA-256 后启动交互安装向导。提供下载进度、取消、网络超时和安装错误提示，成功后刷新状态；不退出主程序、不自动启用解锁。管理员权限仅在安装向导启动时请求。下载取消和失败会清理临时文件，已启动安装包暂留以避免影响安装子进程。组件下载功能不改变无密码账户兼容性与真机验证边界。
