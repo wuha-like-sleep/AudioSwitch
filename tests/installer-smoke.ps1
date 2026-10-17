@@ -89,7 +89,7 @@ function Save-Preview($Process, [string]$Name) {
     $image.Save((Join-Path $PSScriptRoot "../artifacts/$Name-preview.png"))
     $canvas.Dispose(); $image.Dispose()
 }
-foreach ($kind in @('update', 'dialog', 'toast', 'style', 'devices', 'proximity', 'unlock')) {
+foreach ($kind in @('update', 'dialog', 'toast', 'style', 'devices', 'proximity', 'unlock', 'login')) {
     $window = Start-Process $app -ArgumentList "--preview-$kind" -PassThru
     try { Save-Preview $window $kind }
     finally { if (-not $window.HasExited) { Stop-Process -Id $window.Id; $window.WaitForExit() } }

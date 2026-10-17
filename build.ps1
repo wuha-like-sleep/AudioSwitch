@@ -22,3 +22,11 @@ $version = $projectXml.Project.PropertyGroup.Version | Select-Object -First 1
 & $compiler "/DRuntime=$Runtime" "/DAppVersion=$version" "/DSourceDir=$output" (Join-Path $PSScriptRoot "installer/AudioSwitch.iss")
 if ($LASTEXITCODE -ne 0) { throw "Installer compilation failed ($LASTEXITCODE)" }
 Write-Host "Installer: artifacts/installer/AudioSwitch-Setup-$Runtime.exe"
+$nativeArchitecture = @{ "win-x64" = "x64"; "win-arm64" = "ARM64"; "win-x86" = "Win32" }[$Runtime]
+$nativeOutput = Join-Path $PSScriptRoot "artifacts/login-$Runtime"
+cmake -S (Join-Path $PSScriptRoot "native/LoginProvider") -B $nativeOutput -A $nativeArchitecture
+if ($LASTEXITCODE -ne 0) { throw "Login component configuration failed" }
+cmake --build $nativeOutput --config Release
+if ($LASTEXITCODE -ne 0) { throw "Login component build failed" }
+& $compiler "/DRuntime=$Runtime" "/DAppVersion=$version" "/DSourceDir=$nativeOutput/Release" (Join-Path $PSScriptRoot "installer/LoginLab.iss")
+if ($LASTEXITCODE -ne 0) { throw "Login component installer failed" }

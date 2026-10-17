@@ -21,11 +21,12 @@ internal sealed class UnlockProbeForm : ChromeForm
         root.Controls.Add(new Label { Text = "不需要 iPhone App，也不输入密码或 PIN。\n检测会尝试建立并关闭加密蓝牙连接，不发送通话命令。\n请在手机未通话时测试；其他软件占用通道时可能失败。", Dock = DockStyle.Fill, ForeColor = Theme.Muted }, 0, 1);
         root.Controls.Add(summary, 0, 2);
         var card = new RoundedPanel { Dock = DockStyle.Fill, Padding = new Padding(16), Margin = Padding.Empty };
-        report.Text = "检测范围：要求认证的加密蓝牙通道。\r\n\r\nAudioSwitch 本版未安装自定义登录组件；检测不会修改登录设置、锁屏或解锁。\r\n\r\n微软账户的 PIN / Windows Hello 不作为密码读取或重放。是否存在可用账户密码，需在本机登录选项或微软账户安全设置中确认；本工具不会仅凭注册表推断。";
+        report.Text = "检测范围：要求认证的加密蓝牙通道。\r\n\r\n普通安装包不注册登录组件；可从“登录组件”了解独立实验版。检测不会修改登录设置、锁屏或解锁。\r\n\r\n微软账户的 PIN / Windows Hello 不作为密码读取或重放。是否存在可用账户密码，需在本机登录选项或微软账户安全设置中确认；本工具不会仅凭注册表推断。";
         card.Controls.Add(report); root.Controls.Add(card, 0, 3);
         var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false };
         var close = Button("关闭", false); close.Click += (_, _) => Close();
         var start = Button("开始检测", true); start.Enabled = phoneId.Length > 0;
+        var login = Button("登录组件", false); login.Click += (_, _) => { using var form = new LoginComponentForm(); form.ShowDialog(this); };
         var copy = Button("复制结果", false); copy.Click += (_, _) => Clipboard.SetText(summary.Text + Environment.NewLine + report.Text);
         start.Click += async (_, _) =>
         {
@@ -42,7 +43,7 @@ internal sealed class UnlockProbeForm : ChromeForm
             catch (Exception ex) { if (!IsDisposed) { summary.Text = "检测未完成"; report.Text = ex.Message; } }
             finally { running = false; if (!start.IsDisposed) start.Enabled = true; }
         };
-        footer.Controls.AddRange([close, start, copy]); root.Controls.Add(footer, 0, 4);
+        footer.Controls.AddRange([close, start, copy, login]); root.Controls.Add(footer, 0, 4);
         Controls.Add(root); root.BringToFront(); AcceptButton = start; CancelButton = close;
         Shown += (_, _) => { report.Select(0, 0); start.Focus(); };
         FormClosing += (_, _) => lifetime.Cancel();

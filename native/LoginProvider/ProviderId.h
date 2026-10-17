@@ -1,0 +1,3 @@
+#pragma once
+// A dedicated CLSID: never replace or filter a Windows system provider.
+inline constexpr GUID AudioSwitchLoginProviderId = {0xa3ac9286, 0x65ab, 0x4438, {0xb9, 0x7e, 0x84, 0xa4, 0xc9, 0xa6, 0x53, 0x20}};

@@ -58,6 +58,10 @@ internal static class Program
             using var preview = new ProximityForm(new(false, "sample-phone"), () => [new("sample-phone", "我的手机", true, -60, DateTimeOffset.UtcNow)], () => null);
             preview.ShowDialog(); return;
         }
+        if (args.Contains("--preview-login"))
+        {
+            using var preview = new LoginComponentForm(); preview.ShowDialog(); return;
+        }
         if (args.Contains("--preview-unlock"))
         {
             using var preview = new UnlockProbeForm("sample-phone", (_, _) => Task.FromResult(new UnlockProbeResult("演示", "此处为界面演示，不进行真实连接。")));

@@ -15,8 +15,8 @@ internal sealed class UpdateService : IDisposable
     private Task<JsonElement?>? fetch;
     private bool manualOpen;
     private UpdateProgressForm? activeProgress;
-    private static string Repository => Assembly.GetExecutingAssembly().GetCustomAttributes<AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == "GitHubRepository")?.Value ?? "";
-    internal static string CurrentTag => Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.3.3-preview.1";
+    internal static string Repository => Assembly.GetExecutingAssembly().GetCustomAttributes<AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == "GitHubRepository")?.Value ?? "";
+    internal static string CurrentTag => Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.3.4-preview.1";
     public UpdateService(Action<string> notify)
     {
         this.notify = notify;

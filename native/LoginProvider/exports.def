@@ -1,0 +1,4 @@
+LIBRARY AudioSwitch.LoginProvider
+EXPORTS
+    DllGetClassObject PRIVATE
+    DllCanUnloadNow PRIVATE

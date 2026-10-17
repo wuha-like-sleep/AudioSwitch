@@ -28,10 +28,16 @@ jobs:
         if: matrix.runtime == 'win-x64'
         shell: pwsh
         run: ./tests/installer-smoke.ps1
+      - name: Login component checks
+        if: matrix.runtime == 'win-x64'
+        shell: pwsh
+        run: ./tests/login-component-smoke.ps1
       - uses: actions/upload-artifact@v4
         with:
           name: AudioSwitch-Setup-${{ matrix.runtime }}
-          path: artifacts/installer/AudioSwitch-Setup-${{ matrix.runtime }}.exe
+          path: |
+            artifacts/installer/AudioSwitch-Setup-${{ matrix.runtime }}.exe
+            artifacts/installer/AudioSwitch-LoginLab-Setup-${{ matrix.runtime }}.exe
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always() && matrix.runtime == 'win-x64'
@@ -41,4 +47,5 @@ jobs:
             artifacts/*preview.png
             artifacts/audio-interfaces.txt
             artifacts/settings-checks.txt
+            artifacts/login-component-checks.txt
           if-no-files-found: error

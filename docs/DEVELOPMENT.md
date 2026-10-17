@@ -50,7 +50,7 @@ GitHub 为上传的资产生成 SHA-256 digest。只有包含校验信息且架�
 
 ## 手机解锁边界
 
-当前没有实现手机自动解锁或手机确认解锁。解除已经锁定的 Windows 会话需要系统登录认证；`DeviceWatcher` 的连接状态、名称和信号值不能直接作为解锁凭据。仅使用现有 iPhone 配对、不安装手机 App 的路线仍需独立验证：Windows Credential Provider 与受保护的认证通道、手机身份确认、账户类型兼容性、撤销/恢复方案，以及真实锁定会话测试。
+当前没有实现手机自动解锁或手机确认解锁。0.3.4 开始提供独立、可选的原生登录实验组件，尚未启用手机自动提交。解除已经锁定的 Windows 会话需要系统登录认证；`DeviceWatcher` 的连接状态、名称和信号值不能直接作为解锁凭据。仅使用现有 iPhone 配对、不安装手机 App 的路线仍需独立验证：Windows Credential Provider 与受保护的认证通道、手机身份确认、账户类型兼容性、撤销/恢复方案，以及真实锁定会话测试。
 
 后续登录组件不得禁用 Windows 原有的密码、PIN 或 Windows Hello 提供程序；不得以模拟输入、明文配置或单纯名称/RSSI 匹配宣称完成认证。当前发行版只取消离开倒计时或调用系统锁屏，不会解锁会话。参考：[Windows Credential Providers](https://learn.microsoft.com/en-us/windows/win32/secauthn/credential-providers-in-windows)。
 
@@ -72,3 +72,18 @@ Credential Provider 负责收集和序列化凭据，最终由 Windows 认证机
 后续原型必须先确定系统支持的认证材料及本机初始化方式，再设计独立提供程序和受保护服务之间的协议、秘密保存、撤销、重试限制与失败回退。保留系统登录入口，在隔离的 Windows 10/11 真机上验证锁定/解锁、重启、离线、手机丢失、蓝牙断开、组件卸载和恢复。当前 CI 只检查保护级别拒绝、缺少手机、模拟结果展示、关闭取消和界面布局，不连接真实手机、不调用登录认证或解锁。
 
 资料：[Credential Provider 架构](https://learn.microsoft.com/en-us/windows/win32/secauthn/credential-providers-in-windows)、[Windows Hello](https://learn.microsoft.com/en-us/windows/apps/develop/security/windows-hello)、[Windows 无密码登录设置](https://support.microsoft.com/en-us/windows/security/go-passwordless-in-windows)、[RFCOMM](https://learn.microsoft.com/en-us/uwp/devices-sensors/send-or-receive-files-with-rfcomm)、[SocketProtectionLevel](https://learn.microsoft.com/en-us/uwp/api/windows.networking.sockets.socketprotectionlevel)。
+
+
+### 0.3.4：原生微软账户登录实验组件
+
+`native/LoginProvider` 为独立 C++17 V2 Credential Provider，独立 CLSID 为 `{A3AC9286-65AB-4438-B97E-84A4C9A65320}`。实现 `ICredentialProvider`、`ICredentialProviderSetUserArray` 和 `ICredentialProviderCredential2`，通过系统给出的用户数组绑定 SID 与 `PKEY_Identity_QualifiedUserName`，仅枚举明确 `MicrosoftAccount\` 命名空间的用户。无密码微软账户缺少本实验所需的密码；不根据注册表推断是否有密码。
+
+仅支持 `CPUS_LOGON` 与 `CPUS_UNLOCK_WORKSTATION`，不接受来自其他组件的序列化凭据，不成为默认入口，`SetSelected` 和枚举均返回不自动登录。手动密码采用 `CRED_PACK_PROTECTED_CREDENTIALS | CRED_PACK_ID_PROVIDER_CREDENTIALS` 打包，提交给 Negotiate 认证包，由 Windows 授权。密码只存在于当前凭据对象内存，替换、提交、取消、失败或释放时擦除；不持久化、不向托盘进程发送。此提交路径遵循微软公开 API，**不等于已通过真实微软账户认证**。
+
+独立 `AudioSwitch-LoginLab-Setup-*.exe` 安装器需要管理员权限，将原生 DLL 安装到 Program Files，只注册自身 CLSID 与 Credential Providers 子键；不安装过滤器，不包装或修改系统提供程序，不更改 Hello/PIN 策略。x64、ARM64、x86 安装器各限制为对应原生操作系统；普通音频安装器仍为当前用户安装，完全不注册实验登录组件。卸载实验组件只删除自身键和文件，DLL 被登录界面占用时可能需要重启。
+
+本版完成的是可向 Windows 提交账户凭据的实验组件。自动解锁尚缺少受保护服务与组件间协议、绑定/撤销、已验证的手机身份和新鲜度、凭据初始化与保存方案、限制重试，以及真实锁定会话验证。任何自动提交均尚未启用。Hello / PIN 兼容指保留原有系统入口，不代表可以由本组件无交互调用 Hello。旧 Companion Device Framework 在 Windows 10 2004 起已弃用，不作为方案依赖。
+
+CI 原生测试在不注册时加载 DLL，验证 COM 生命周期、SID 绑定、非微软账户排除、使用场景拒绝、非默认/非自动提交、受保护缓冲区可被 Windows 还原、缓冲区不含测试密码明文、取消/失败清除。隔离 CI 还安装和卸载实验组件，检查 Program Files 路径、自身注册及系统提供程序键保留，加载已安装 DLL 重复测试。测试仅使用虚构账户和测试字符串，不执行真实 LSA 登录、锁屏或退出会话；ARM64 / x86 仅构建，原生运行测试为 x64。
+
+资料：[身份提供程序凭据打包](https://learn.microsoft.com/en-us/windows/win32/api/wincred/nf-wincred-credpackauthenticationbufferw)、[GetUserSid](https://learn.microsoft.com/en-us/windows/win32/api/credentialprovider/nf-credentialprovider-icredentialprovidercredential2-getusersid)、[使用场景](https://learn.microsoft.com/en-us/windows/win32/api/credentialprovider/ne-credentialprovider-credential_provider_usage_scenario)、[伴随设备框架弃用](https://learn.microsoft.com/en-us/windows-hardware/design/device-experiences/windows-hello-companion-device-framework)。
