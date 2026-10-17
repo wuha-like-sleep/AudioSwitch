@@ -21,7 +21,7 @@ internal static class Program
         }
         ApplicationConfiguration.Initialize();
         using var mutex = new Mutex(true, "Local\\AudioSwitch.Tray", out bool first);
-        if (!first) { if (!args.Contains("--startup")) AppDialog.Show("音频切换已在运行，请查看系统托盘。", "音频切换"); return; }
+        if (!first) { if (!args.Contains("--startup")) HotkeyWindow.OpenExistingSettings(); return; }
         if (args.Contains("--preview"))
         {
             using var preview = new SettingsForm(
@@ -63,6 +63,7 @@ internal sealed class TrayContext : ApplicationContext
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 2500 };
     private Settings? settings;
     private bool configuring;
+    private SettingsForm? settingsForm;
     private SwitchToast? toast;
     private string? lastError;
     private string? previousOutput;
@@ -76,7 +77,7 @@ internal sealed class TrayContext : ApplicationContext
             settings = SettingsStore.Read(configPath);
         }
         catch (Exception ex) { Notify("配置读取失败，请重新选择设备。" + ex.Message, true); }
-        hotkey = new HotkeyWindow(Switch);
+        hotkey = new HotkeyWindow(Switch, Configure);
         hotkey.TryChange(settings?.HotkeyModifiers ?? 3, settings?.HotkeyKey ?? Keys.F11);
         switchItem = new ToolStripMenuItem("切换耳机 / 音箱", null, (_, _) => Switch());
         menu.Items.Add(switchItem);
@@ -102,7 +103,7 @@ internal sealed class TrayContext : ApplicationContext
         SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
         SynchronizationContext.Current!.Post(async _ =>
         {
-            if (settings == null && !startup) Configure(); else RefreshStatus();
+            if (!startup) Configure(); else RefreshStatus();
             if (settings?.AutoCheckUpdates == true) await updates.CheckAsync(true);
         }, null);
     }
@@ -116,23 +117,34 @@ internal sealed class TrayContext : ApplicationContext
 
     private void Configure()
     {
-        if (configuring) return;
+        if (settingsForm is { IsDisposed: false })
+        {
+            if (settingsForm.WindowState == FormWindowState.Minimized) settingsForm.WindowState = FormWindowState.Normal;
+            settingsForm.Activate(); return;
+        }
         configuring = true;
-        string operation = "读取音频设备";
         try
         {
-            using var form = new SettingsForm(AudioDevices.List(), settings);
-            if (form.ShowDialog() != DialogResult.OK) return;
-            operation = "保存设置";
-            var candidate = form.Selection!;
-            uint oldModifiers = settings?.HotkeyModifiers ?? 3;
-            Keys oldKey = settings?.HotkeyKey ?? Keys.F11;
+            using var form = new SettingsForm(AudioDevices.List(), settings, SaveSettings);
+            settingsForm = form;
+            form.ShowDialog();
+        }
+        catch (Exception ex) { AppDialog.Show("读取音频设备失败：" + ex.Message, "无法打开设置"); }
+        finally { settingsForm = null; configuring = false; }
+    }
+
+    private string? SaveSettings(Settings candidate, bool startWithWindows)
+    {
+        uint oldModifiers = settings?.HotkeyModifiers ?? 3;
+        Keys oldKey = settings?.HotkeyKey ?? Keys.F11;
+        try
+        {
             bool oldStartup = StartupService.Enabled;
             if (!hotkey.TryChange(candidate.HotkeyModifiers, candidate.HotkeyKey))
-            { Notify("该快捷键被占用或不可用，已保留原快捷键。请重新设置。", true); return; }
+                return "该快捷键被其他程序占用，请换一个组合。你刚才的选择已保留。";
             try
             {
-                if (form.StartWithWindows != oldStartup) StartupService.SetEnabled(form.StartWithWindows);
+                if (startWithWindows != oldStartup) StartupService.SetEnabled(startWithWindows);
                 SettingsStore.Write(configPath, candidate);
             }
             catch
@@ -142,16 +154,11 @@ internal sealed class TrayContext : ApplicationContext
                 throw;
             }
             settings = candidate;
-            RefreshMenu();
-            RefreshStatus();
-            Notify("设置已保存。点击托盘图标或按 " + HotkeyWindow.Describe(candidate.HotkeyModifiers, candidate.HotkeyKey) + " 切换。");
+            RefreshMenu(); RefreshStatus();
+            Notify("设置已保存。按 " + HotkeyWindow.Describe(candidate.HotkeyModifiers, candidate.HotkeyKey) + " 即可切换。");
+            return null;
         }
-        catch (Exception ex)
-        {
-            string details = $"{operation}失败：{ex.Message}\r\n\r\n错误类型：{ex.GetType().Name}\r\n错误码：0x{ex.HResult:X8}\r\n\r\n按 Ctrl+C 可以复制此提示。";
-            AppDialog.Show(details, "AudioSwitch · " + operation + "失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        }
-        finally { configuring = false; }
+        catch (Exception ex) { return $"保存设置失败：{ex.Message}\r\n错误码：0x{ex.HResult:X8}\r\n你的选择已保留，可以修改后重试。"; }
     }
 
     private void SelectOutput(bool headphones)
@@ -224,13 +231,16 @@ internal sealed class TrayContext : ApplicationContext
 internal sealed class HotkeyWindow : NativeWindow, IDisposable
 {
     private readonly Action callback;
+    private readonly Action openSettings;
+    private const int OpenSettingsMessage = 0x8001;
     private int activeId;
     private uint modifiers;
     private Keys key;
     public bool Registered => activeId != 0;
-    public HotkeyWindow(Action callback)
+    public HotkeyWindow(Action callback, Action? openSettings = null)
     {
         this.callback = callback;
+        this.openSettings = openSettings ?? (() => { });
         CreateHandle(new CreateParams { Caption = "AudioSwitch.Hotkey", Parent = new IntPtr(-3) });
     }
     public bool TryChange(uint newModifiers, Keys newKey)
@@ -249,8 +259,22 @@ internal sealed class HotkeyWindow : NativeWindow, IDisposable
     protected override void WndProc(ref Message m)
     {
         if (m.Msg == 0x0312 && m.WParam.ToInt32() == activeId) callback();
+        if (m.Msg == OpenSettingsMessage) openSettings();
         base.WndProc(ref m);
     }
+    public static void OpenExistingSettings()
+    {
+        for (int attempt = 0; attempt < 20; attempt++)
+        {
+            var window = FindWindowEx(new IntPtr(-3), IntPtr.Zero, null, "AudioSwitch.Hotkey");
+            if (window != IntPtr.Zero) { PostMessage(window, OpenSettingsMessage, IntPtr.Zero, IntPtr.Zero); return; }
+            Thread.Sleep(100);
+        }
+    }
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern IntPtr FindWindowEx(IntPtr parent, IntPtr after, string? className, string title);
+    [DllImport("user32.dll")]
+    private static extern bool PostMessage(IntPtr window, int message, IntPtr wParam, IntPtr lParam);
     public void Dispose() { if (Registered) UnregisterHotKey(Handle, activeId); DestroyHandle(); }
     [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool RegisterHotKey(IntPtr window, int id, uint modifiers, uint key);

@@ -34,7 +34,20 @@ internal static class SettingsStore
             if (!rejected) throw new InvalidOperationException("Locked settings should reject replacement.");
         }
         if (Read(path) != second) throw new InvalidOperationException("Failed save changed the old settings.");
-        using var hotkey = new HotkeyWindow(() => { });
+        bool reopened = false;
+        using var hotkey = new HotkeyWindow(() => { }, () => reopened = true);
+        HotkeyWindow.OpenExistingSettings();
+        Application.DoEvents();
+        if (!reopened) throw new InvalidOperationException("Opening existing settings failed.");
+        Settings? saved = null;
+        using (var form = new SettingsForm([], second, (candidate, _) => { saved = candidate; return null; }))
+        {
+            form.Show();
+            form.AcceptButton!.PerformClick();
+            if (saved != second || form.Selection != second)
+                throw new InvalidOperationException("Saving preferences lost disconnected device selections.");
+            form.Close();
+        }
         if (!hotkey.TryChange(3, Keys.F11) || !hotkey.TryChange(7, Keys.F10))
             throw new InvalidOperationException("Hotkey registration or replacement failed.");
         bool original = StartupService.Enabled;

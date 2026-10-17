@@ -15,7 +15,7 @@ internal sealed class SettingsForm : ChromeForm
     public Settings? Selection { get; private set; }
     public bool StartWithWindows => startup.Checked;
 
-    public SettingsForm(List<OutputDevice> devices, Settings? settings)
+    public SettingsForm(List<OutputDevice> devices, Settings? settings, Func<Settings, bool, string?>? saveSettings = null)
     {
         Text = "AudioSwitch · 设置";
         Icon = BrandIcon.Load();
@@ -71,7 +71,7 @@ internal sealed class SettingsForm : ChromeForm
         }, 1, 1);
         var author = new Label
         {
-            Text = "开发者  wuha-like-sleep", ForeColor = Muted, Font = new Font(Font.FontFamily, 9),
+            Text = $"{UpdateService.CurrentTag}\n开发者  wuha-like-sleep", ForeColor = Muted, Font = new Font(Font.FontFamily, 9),
             Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, Margin = Padding.Empty
         };
         hero.Controls.Add(author, 2, 0);
@@ -99,7 +99,20 @@ internal sealed class SettingsForm : ChromeForm
         options.Controls.Add(capture, 1, 1);
         options.Controls.Add(startup, 0, 2); options.Controls.Add(autoUpdate, 1, 2);
         options.Controls.Add(new Label { Text = "切换提示屏幕", AutoSize = true, Padding = new Padding(0, 8, 0, 0) }, 0, 3);
-        options.Controls.Add(toastMonitor, 1, 3);
+        var monitorRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Margin = Padding.Empty };
+        monitorRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        monitorRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 68));
+        var previewToast = new ThemeButton { Text = "预览", Dock = DockStyle.Fill, Margin = new Padding(8, 0, 0, 0) };
+        SwitchToast? sampleToast = null;
+        previewToast.Click += (_, _) =>
+        {
+            sampleToast?.Close(); sampleToast?.Dispose();
+            sampleToast = new SwitchToast("提示预览", "切换成功后会在这里提示", (toastMonitor.SelectedItem as Choice)?.Id ?? "");
+            sampleToast.Show();
+        };
+        FormClosed += (_, _) => { sampleToast?.Close(); sampleToast?.Dispose(); };
+        monitorRow.Controls.Add(toastMonitor, 0, 0); monitorRow.Controls.Add(previewToast, 1, 0);
+        options.Controls.Add(monitorRow, 1, 3);
         FillMonitors(settings?.ToastMonitor ?? "");
         optionSurface.Controls.Add(options);
         root.Controls.Add(optionSurface, 0, 3);
@@ -121,7 +134,10 @@ internal sealed class SettingsForm : ChromeForm
             if (headphones.SelectedItem is not Choice h || speakers.SelectedItem is not Choice s)
             { AppDialog.Show(this, "请选择耳机和音箱。", "设备未选全"); return; }
             if (h.Id == s.Id) { AppDialog.Show(this, "耳机和音箱必须是两个不同的输出设备。", "设备重复"); return; }
-            Selection = new Settings(h.Id, s.Id, modifiers, hotkey, autoUpdate.Checked, (toastMonitor.SelectedItem as Choice)?.Id ?? ""); DialogResult = DialogResult.OK;
+            var candidate = new Settings(h.Id, s.Id, modifiers, hotkey, autoUpdate.Checked, (toastMonitor.SelectedItem as Choice)?.Id ?? "");
+            var error = saveSettings?.Invoke(candidate, StartWithWindows);
+            if (error != null) { AppDialog.Show(this, error, "设置未保存"); return; }
+            Selection = candidate; DialogResult = DialogResult.OK;
         };
     }
     private void FillMonitors(string preferred)
@@ -165,7 +181,15 @@ internal sealed class SettingsForm : ChromeForm
             string label = devices.Count(d => d.Name == device.Name) > 1 ? $"{device.Name} [{device.Id[^Math.Min(12, device.Id.Length)..]}]" : device.Name;
             headphones.Items.Add(new Choice(device.Id, label)); speakers.Items.Add(new Choice(device.Id, label));
         }
-        headphones.SelectedIndex = devices.FindIndex(d => d.Id == h); speakers.SelectedIndex = devices.FindIndex(d => d.Id == s);
+        RestoreChoice(headphones, h, "已保存的耳机 · 未连接");
+        RestoreChoice(speakers, s, "已保存的音箱 · 未连接");
+    }
+    private static void RestoreChoice(ComboBox picker, string? id, string offlineLabel)
+    {
+        if (string.IsNullOrEmpty(id)) { picker.SelectedIndex = -1; return; }
+        var choice = picker.Items.Cast<Choice>().FirstOrDefault(c => c.Id == id);
+        if (choice == null) { choice = new Choice(id, offlineLabel); picker.Items.Add(choice); }
+        picker.SelectedItem = choice;
     }
     private sealed record Choice(string Id, string Label) { public override string ToString() => Label; }
 }
