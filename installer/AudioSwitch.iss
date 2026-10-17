@@ -2,7 +2,7 @@
   #define Runtime "win-x64"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.2.2"
+  #define AppVersion "0.2.3"
 #endif
 #ifndef SourceDir
   #define SourceDir "..\artifacts\" + Runtime

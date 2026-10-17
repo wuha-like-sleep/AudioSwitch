@@ -38,7 +38,7 @@ internal sealed class RoundedPanel : Panel
 }
 internal sealed class ThemeButton : Control, IButtonControl
 {
-    public bool Primary { get; init; }
+    public bool Primary { get; set; }
     public DialogResult DialogResult { get; set; }
     public void NotifyDefault(bool value) => Invalidate();
     public void PerformClick() { if (Enabled) OnClick(EventArgs.Empty); }

@@ -4,16 +4,18 @@ namespace AudioSwitch;
 internal sealed class SwitchToast : Form
 {
     private readonly string preferredMonitor;
+    private readonly string corner;
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 2200 };
     protected override bool ShowWithoutActivation => true;
     protected override CreateParams CreateParams
     {
         get { var p = base.CreateParams; p.ExStyle |= 0x08000000 | 0x00000080 | 0x00000020; return p; }
     }
-    public SwitchToast(string label, string name, string preferredMonitor = "", int duration = 2200)
+    public SwitchToast(string label, string name, string preferredMonitor = "", int duration = 2200, string corner = "bottom-right")
     {
         this.preferredMonitor = preferredMonitor;
-        timer.Interval = duration;
+        this.corner = corner;
+        timer.Interval = Math.Clamp(duration, 1000, 30000);
         Text = "AudioSwitch · 切换提示";
         StartPosition = FormStartPosition.Manual;
         Location = ToastPlacement.Resolve(preferredMonitor).WorkArea.Location;
@@ -29,7 +31,7 @@ internal sealed class SwitchToast : Form
         using var icon = BrandIcon.Load();
         var mark = new PictureBox { Image = icon.ToBitmap(), SizeMode = PictureBoxSizeMode.Zoom, Size = new Size(32, 32), Margin = new Padding(0, 8, 10, 0) };
         body.Controls.Add(mark, 0, 0); body.SetRowSpan(mark, 2);
-        body.Controls.Add(new Label { Text = "已切换到" + label, Font = new Font(Font.FontFamily, 12, FontStyle.Bold), Dock = DockStyle.Fill }, 1, 0);
+        body.Controls.Add(new Label { Text = label is "耳机" or "音箱" ? "已切换到" + label : label, Font = new Font(Font.FontFamily, 12, FontStyle.Bold), Dock = DockStyle.Fill }, 1, 0);
         body.Controls.Add(new Label { Text = name, ForeColor = Theme.Muted, Dock = DockStyle.Fill, AutoEllipsis = true }, 1, 1);
         Controls.Add(body);
         UpdateCorners();
@@ -45,7 +47,7 @@ internal sealed class SwitchToast : Form
         var area = ToastPlacement.Resolve(preferredMonitor).WorkArea;
         if (Width > area.Width) Width = area.Width;
         if (Height > area.Height) Height = area.Height;
-        Location = ToastPlacement.Position(area, Size, (int)Math.Round(24 * DeviceDpi / 96f));
+        Location = ToastPlacement.Position(area, Size, (int)Math.Round(24 * DeviceDpi / 96f), corner);
     }
     private void UpdateCorners()
     {

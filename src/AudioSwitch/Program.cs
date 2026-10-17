@@ -42,6 +42,11 @@ internal static class Program
             preview.ShowDialog();
             return;
         }
+        if (args.Contains("--preview-style"))
+        {
+            using var preview = new ToastStyleForm("", "bottom-right", 2200);
+            preview.ShowDialog(); return;
+        }
         if (args.Contains("--preview-update"))
         {
             using var preview = new UpdateProgressForm(); preview.Report(24 * 1048576, 48 * 1048576);
@@ -61,7 +66,7 @@ internal static class Program
     }
 }
 
-internal sealed record Settings(string Headphones, string Speakers, uint HotkeyModifiers = 3, Keys HotkeyKey = Keys.F11, bool AutoCheckUpdates = true, string ToastMonitor = "", bool ShowSwitchNotifications = true);
+internal sealed record Settings(string Headphones, string Speakers, uint HotkeyModifiers = 3, Keys HotkeyKey = Keys.F11, bool AutoCheckUpdates = true, string ToastMonitor = "", bool ShowSwitchNotifications = true, string ToastCorner = "bottom-right", int ToastDuration = 2200);
 
 internal sealed class TrayContext : ApplicationContext
 {
@@ -221,7 +226,7 @@ internal sealed class TrayContext : ApplicationContext
     {
         toast?.Close(); toast?.Dispose(); toast = null;
         if (settings?.ShowSwitchNotifications == false) return;
-        toast = new SwitchToast(title, name, settings?.ToastMonitor ?? "");
+        toast = new SwitchToast(title, name, settings?.ToastMonitor ?? "", settings?.ToastDuration ?? 2200, settings?.ToastCorner ?? "bottom-right");
         toast.Show();
     }
 

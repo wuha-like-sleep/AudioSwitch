@@ -31,7 +31,7 @@ internal static class SettingsStore
     {
         string path = Path.Combine(Path.GetDirectoryName(resultPath)!, "settings-roundtrip.json");
         var first = new Settings("test-headphones", "test-speakers");
-        var second = new Settings("second-headphones", "test-speakers", 7, Keys.F10, false, "DISPLAY2", false);
+        var second = new Settings("second-headphones", "test-speakers", 7, Keys.F10, false, "DISPLAY2", false, "top-left", 3000);
         File.WriteAllText(path, """{"Headphones":"legacy-h","Speakers":"legacy-s"}""");
         if (Read(path)?.ShowSwitchNotifications != true)
             throw new InvalidOperationException("Older settings did not keep switch notifications enabled.");
@@ -126,9 +126,14 @@ internal static class SettingsStore
         foreach (var monitor in screens)
         {
             var size = new Size(570, 144);
-            var point = ToastPlacement.Position(monitor.WorkArea, size, 36);
-            if (!monitor.WorkArea.Contains(new Rectangle(point, size)))
-                throw new InvalidOperationException("Toast placement escaped the selected screen.");
+            foreach (var corner in ToastPlacement.Corners)
+            {
+                var point = ToastPlacement.Position(monitor.WorkArea, size, 36, corner);
+                if (!monitor.WorkArea.Contains(new Rectangle(point, size))) throw new InvalidOperationException("Toast placement escaped the selected screen.");
+                if (corner.EndsWith("left") && point.X != monitor.WorkArea.Left + 36
+                    || corner.StartsWith("top") && point.Y != monitor.WorkArea.Top + 36)
+                    throw new InvalidOperationException("Toast corner selection failed.");
+            }
         }
         if (SwitchTarget.Choose(first, first.Headphones, [first.Headphones, first.Speakers]) != first.Speakers
             || SwitchTarget.Choose(first, first.Speakers, [first.Headphones, first.Speakers]) != first.Headphones
@@ -136,6 +141,14 @@ internal static class SettingsStore
             || SwitchTarget.Choose(first, first.Headphones, [first.Headphones]) != first.Headphones
             || SwitchTarget.Choose(first, null, []) != null)
             throw new InvalidOperationException("Connected device switch selection failed.");
+        using (var style = new ToastStyleForm("", "top-left", 3000))
+        {
+            style.Show();
+            if (style.Corner != "top-left" || style.Duration != 3000) throw new InvalidOperationException("Toast style preferences were not restored.");
+            Descendants(style).OfType<ThemeButton>().First(c => c.Text == "右下角").PerformClick();
+            if (style.Corner != "bottom-right") throw new InvalidOperationException("Visual corner selection failed.");
+            style.Close();
+        }
         File.Delete(path);
     }
 }
