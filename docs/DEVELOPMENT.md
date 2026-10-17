@@ -109,6 +109,8 @@ CI 验证服务安装、启动、停止、删除；构造管理员测试绑定�
 
 资料：[蓝牙套接字选项](https://learn.microsoft.com/en-us/windows/win32/bluetooth/bluetooth-and-socket-options)、[管道客户端进程](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeclientprocessid)、[管道服务端进程](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeserverprocessid)、[用户会话令牌](https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/nf-wtsapi32-wtsqueryusertoken)。
 
-0.3.5 发行代码：`4ed729d8449666ff24b36ff81f2e6bb4f7c0736d`。[Windows CI 39024461210](https://github.com/wuha-like-sleep/AudioSwitch/actions/runs/39024461210) 三架构构建通过，x64 服务安装/重复安装升级/启动/停止/删除、缺损绑定拒绝、普通进程拒绝和服务不可用拒绝通过。仍无真实手机或真实账户认证成功记录。
+0.3.5 Preview 2 发行代码：`459cd86aef6a4aba5839846df991f090dced33df`。[Windows CI 39024788404](https://github.com/wuha-like-sleep/AudioSwitch/actions/runs/39024788404) 三架构构建通过，x64 服务安装/重复安装升级/启动/停止/删除、缺损绑定拒绝、普通进程拒绝和服务不可用拒绝通过。仍无真实手机或真实账户认证成功记录。
 
 系统服务安装固定为原生 Program Files 下的 AudioSwitch Login Lab，不接受自定义目录；管理员工具也核对自身路径才允许注册服务。CI 验证自定义可写目录和开发目录中的松散工具不能注册服务。
+
+Preview 2 的固定路径和自定义目录拒绝检查已通过最终 Windows CI；升级实验组件后可能需重启以释放旧 DLL，首次启动仍使用系统 Hello / PIN 登录。
