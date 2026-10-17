@@ -83,7 +83,14 @@ void Verify(IClassFactory* factory) {
         PSEC_WINNT_AUTH_IDENTITY_OPAQUE decrypted = nullptr;
         Check(SspiCopyAuthIdentity(original, &decrypted) == SEC_E_OK, "Copy protected identity");
         Check(SspiIsAuthIdentityEncrypted(decrypted) != FALSE, "Identity is encrypted");
-        Check(SspiDecryptAuthIdentityEx(SEC_WINNT_AUTH_IDENTITY_ENCRYPT_SAME_LOGON, decrypted) == SEC_E_OK, "Decrypt same-session test identity");
+        // The Ex entry point is exported by SspiCli, not the Secur32 import library.
+        auto sspi = LoadLibraryExW(L"sspicli.dll", nullptr, LOAD_LIBRARY_SEARCH_SYSTEM32);
+        using DecryptIdentity = SECURITY_STATUS(SEC_ENTRY*)(ULONG, PSEC_WINNT_AUTH_IDENTITY_OPAQUE);
+        auto decrypt = sspi ? reinterpret_cast<DecryptIdentity>(GetProcAddress(sspi, "SspiDecryptAuthIdentityEx")) : nullptr;
+        Check(decrypt != nullptr, "System SSPI decrypt entry point");
+        const auto decryptedStatus = decrypt(SEC_WINNT_AUTH_IDENTITY_ENCRYPT_SAME_LOGON, decrypted);
+        FreeLibrary(sspi);
+        Check(decryptedStatus == SEC_E_OK, "Decrypt same-session test identity");
         ULONG decodedSize = 0; char* decoded = nullptr;
         Check(SspiMarshalAuthIdentity(decrypted, &decodedSize, &decoded) == SEC_E_OK, "Marshal decrypted test identity");
         const auto decodedBytes = reinterpret_cast<const BYTE*>(decoded);
