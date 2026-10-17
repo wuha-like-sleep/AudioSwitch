@@ -13,7 +13,7 @@
     <Copyright>Copyright © 2026 wuha-like-sleep</Copyright>
     <GitHubRepository Condition="'$(GitHubRepository)' == ''">wuha-like-sleep/AudioSwitch</GitHubRepository>
     <Version>0.3.5</Version>
-    <InformationalVersion>0.3.5-preview.1</InformationalVersion>
+    <InformationalVersion>0.3.5-preview.2</InformationalVersion>
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="Assets/app.ico" />

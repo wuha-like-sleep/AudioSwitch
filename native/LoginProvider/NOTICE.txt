@@ -1,4 +1,4 @@
-AudioSwitch 登录实验组件 · 0.3.5 Preview 1
+AudioSwitch 登录实验组件 · 0.3.5 Preview 2
 开发者：wuha-like-sleep
 
 这是可选的 Windows 原生 Credential Provider 实验组件，不是手机自动解锁功能。

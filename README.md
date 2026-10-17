@@ -10,7 +10,7 @@
 一个快捷键，循环切换 USB、蓝牙、HDMI 等输出设备。
 
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-465CE8?logo=windows&logoColor=white)](#安装)
-[![Release](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-v0.3.5--preview.1-465CE8)](https://github.com/wuha-like-sleep/AudioSwitch/releases)
+[![Release](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-v0.3.5--preview.2-465CE8)](https://github.com/wuha-like-sleep/AudioSwitch/releases)
 [![Build](https://github.com/wuha-like-sleep/AudioSwitch/actions/workflows/build.yml/badge.svg)](https://github.com/wuha-like-sleep/AudioSwitch/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/License-MIT-22A77A)](LICENSE)
 
@@ -22,7 +22,7 @@
 
 <br />
 
-![AudioSwitch 设置界面](docs/images/settings-0.3.4-preview1.png)
+![AudioSwitch 设置界面](docs/images/settings-0.3.5-preview1.png)
 
 <div align="center"><sub>Windows 实际运行截图 · 展示使用示例设备</sub></div>
 
@@ -33,45 +33,45 @@
 
 **管理输出设备**
 
-![多设备循环列表](docs/images/devices-0.3.4-preview1.png)
+![多设备循环列表](docs/images/devices-0.3.5-preview1.png)
 
 **手机离开锁屏**
 
-![蓝牙手机锁屏设置](docs/images/proximity-0.3.4-preview1.png)
+![蓝牙手机锁屏设置](docs/images/proximity-0.3.5-preview1.png)
 
 <sub>手机状态为界面演示数据，真实连接和锁屏需在配对手机上验证。</sub>
 
 **解锁链路研究检测**
 
-![解锁链路检测界面](docs/images/unlock-0.3.4-preview1.png)
+![解锁链路检测界面](docs/images/unlock-0.3.5-preview1.png)
 
 <sub>手动检测加密蓝牙连接，尚未实现 Windows 自动解锁；截图不代表真实 iPhone 检测通过。</sub>
 
-**Windows 登录实验组件**
+**手机认证与 Windows 登录实验组件**
 
-![原生登录组件说明与安装入口](docs/images/login-0.3.4-preview1.png)
+![原生登录组件说明与安装入口](docs/images/login-0.3.5-preview1.png)
 
-<sub>说明页截图；登录页中的真实微软账户认证仍需真机验证。</sub>
+<sub>绑定入口与实验范围；真实 iPhone、系统服务蓝牙和微软账户认证仍需真机验证。</sub>
 
 **更新下载**
 
-![更新下载界面](docs/images/update-0.3.4-preview1.png)
+![更新下载界面](docs/images/update-0.3.5-preview1.png)
 
 **版本检查结果**
 
-![版本提示界面](docs/images/dialog-0.3.4-preview1.png)
+![版本提示界面](docs/images/dialog-0.3.5-preview1.png)
 
 **提示样式**
 
-![提示位置与停留时间](docs/images/style-0.3.4-preview1.png)
+![提示位置与停留时间](docs/images/style-0.3.5-preview1.png)
 
 **切换提示**
 
-![切换提示](docs/images/toast-0.3.4-preview1.png)
+![切换提示](docs/images/toast-0.3.5-preview1.png)
 
 **安装向导**
 
-![安装向导](docs/images/installer-0.3.4-preview1.png)
+![安装向导](docs/images/installer-0.3.5-preview1.png)
 
 </details>
 
@@ -91,9 +91,9 @@
 
 | 你的电脑 | 下载 |
 | :--- | :--- |
-| Intel / AMD 64 位电脑 · 大多数用户选择此项 | **[Windows x64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.5-preview.1/AudioSwitch-Setup-win-x64.exe)** |
-| Windows ARM64 电脑 | [Windows ARM64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.5-preview.1/AudioSwitch-Setup-win-arm64.exe) |
-| Windows 10 32 位电脑 | [Windows x86](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.5-preview.1/AudioSwitch-Setup-win-x86.exe) |
+| Intel / AMD 64 位电脑 · 大多数用户选择此项 | **[Windows x64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.5-preview.2/AudioSwitch-Setup-win-x64.exe)** |
+| Windows ARM64 电脑 | [Windows ARM64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.5-preview.2/AudioSwitch-Setup-win-arm64.exe) |
+| Windows 10 32 位电脑 | [Windows x86](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.5-preview.2/AudioSwitch-Setup-win-x86.exe) |
 
 运行安装向导，选择安装位置、自启动和桌面快捷方式。程序默认安装到当前用户目录，安装完成后从开始菜单打开 **AudioSwitch**。
 
@@ -110,7 +110,7 @@
 | 无密码微软账户、组织账户、本地账户 | 本次实验不支持，继续使用原有系统登录方式 |
 | iPhone 靠近自动解锁 | 未实现；不能仅凭蓝牙连接或信号宣称完成 |
 
-在 **[0.3.5 实验版下载页](https://github.com/wuha-like-sleep/AudioSwitch/releases/tag/v0.3.5-preview.1)** 选择匹配系统原生架构的 `AudioSwitch-LoginLab-Setup-win-*.exe`。安装后从应用“离开锁屏 → 解锁检测 → 登录组件”绑定已配对手机，需要管理员确认，即时生效。绑定模式只用于同一用户已登录后锁定的会话。在 Windows 登录页的“登录选项”中选择“AudioSwitch 登录实验”，仍需手动输入微软账户密码；服务验证手机失败会停止提交并清除密码，切回原有 PIN / Hello 即可。未绑定时保留手动密码实验模式。密码不保存，提交、取消或失败后清除。不要把 PIN 当账户密码，也不要向开发者发送任何登录凭据。
+在 **[0.3.5 实验版下载页](https://github.com/wuha-like-sleep/AudioSwitch/releases/tag/v0.3.5-preview.2)** 选择匹配系统原生架构的 `AudioSwitch-LoginLab-Setup-win-*.exe`。安装后从应用“离开锁屏 → 解锁检测 → 登录组件”绑定已配对手机，需要管理员确认，即时生效。绑定模式只用于同一用户已登录后锁定的会话。在 Windows 登录页的“登录选项”中选择“AudioSwitch 登录实验”，仍需手动输入微软账户密码；服务验证手机失败会停止提交并清除密码，切回原有 PIN / Hello 即可。未绑定时保留手动密码实验模式。密码不保存，提交、取消或失败后清除。不要把 PIN 当账户密码，也不要向开发者发送任何登录凭据。
 
 卸载 Windows“已安装的应用”中的 **AudioSwitch 登录实验组件** 可移除它自己的注册、桥接服务和绑定，可能需要重启释放 DLL。独立卸载音频切换程序不会卸载该实验组件。[开发与验证范围](docs/DEVELOPMENT.md)
 

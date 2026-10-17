@@ -10,6 +10,13 @@ $dll = Join-Path $PSScriptRoot '../artifacts/login-win-x64/Release/AudioSwitch.L
 if ($LASTEXITCODE -ne 0) { throw 'Native login provider contract checks failed' }
 $setup = Join-Path $PSScriptRoot '../artifacts/installer/AudioSwitch-LoginLab-Setup-win-x64.exe'
 $install = Join-Path $env:ProgramFiles 'AudioSwitch Login Lab'
+$unsafeInstall = Join-Path $env:TEMP 'AudioSwitch-Unsafe-Lab-Test'
+$rejected = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', "/DIR=$unsafeInstall" -Wait -PassThru
+if ($rejected.ExitCode -eq 0 -or (Test-Path (Join-Path $unsafeInstall 'AudioSwitch.LoginBridge.exe'))) { throw 'Lab installer accepted a custom writable directory' }
+$looseBridge = Join-Path $PSScriptRoot '../artifacts/login-win-x64/Release/AudioSwitch.LoginBridge.exe'
+& $looseBridge '--install-service'
+if ($LASTEXITCODE -eq 0) { throw 'Loose helper registered itself outside Program Files' }
+
 try {
     $process = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
     if ($process.ExitCode -ne 0) { throw "Lab installer exit $($process.ExitCode)" }

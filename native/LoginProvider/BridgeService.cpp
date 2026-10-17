@@ -134,6 +134,11 @@ int ManageService(PCWSTR operation) {
     DWORD error = ERROR_SUCCESS;
     if (wcscmp(operation, L"--install-service") == 0) {
         wchar_t executable[32768]{}; if (!GetModuleFileNameW(nullptr, executable, _countof(executable))) error = GetLastError();
+        PWSTR programFiles = nullptr;
+        if (FAILED(SHGetKnownFolderPath(FOLDERID_ProgramFiles, KF_FLAG_DEFAULT, nullptr, &programFiles))) error = ERROR_ACCESS_DENIED;
+        wchar_t expected[32768]{};
+        if (programFiles) { swprintf_s(expected, L"%s\\AudioSwitch Login Lab\\AudioSwitch.LoginBridge.exe", programFiles); CoTaskMemFree(programFiles); }
+        if (!*expected || _wcsicmp(executable, expected) != 0) error = ERROR_ACCESS_DENIED;
         wchar_t command[32772]{}; swprintf_s(command, L"\"%s\"", executable);
         if (!error && !service) service = CreateServiceW(manager, Bridge::ServiceName, L"AudioSwitch 登录桥接", SERVICE_QUERY_STATUS | SERVICE_START | SERVICE_STOP | SERVICE_CHANGE_CONFIG | DELETE, SERVICE_WIN32_OWN_PROCESS, SERVICE_AUTO_START, SERVICE_ERROR_NORMAL, command, nullptr, nullptr, nullptr, L"LocalSystem", nullptr);
         else if (!error && !ChangeServiceConfigW(service, SERVICE_WIN32_OWN_PROCESS, SERVICE_AUTO_START, SERVICE_ERROR_NORMAL, command, nullptr, nullptr, nullptr, L"LocalSystem", nullptr, L"AudioSwitch 登录桥接")) error = GetLastError();

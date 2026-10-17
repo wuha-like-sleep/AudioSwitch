@@ -21,9 +21,9 @@ BEGIN
 #else
    VALUE "FileDescription", "AudioSwitch Login Lab Credential Provider\0"
 #endif
-   VALUE "FileVersion", "0.3.5-preview.1\0"
+   VALUE "FileVersion", "0.3.5-preview.2\0"
    VALUE "ProductName", "AudioSwitch Login Lab\0"
-   VALUE "ProductVersion", "0.3.5-preview.1\0"
+   VALUE "ProductVersion", "0.3.5-preview.2\0"
    VALUE "LegalCopyright", "Copyright (c) 2026 wuha-like-sleep\0"
   END
  END

@@ -19,6 +19,8 @@ AppName=AudioSwitch 登录实验组件
 AppVersion={#AppVersion}
 AppPublisher=wuha-like-sleep
 DefaultDirName={autopf}\AudioSwitch Login Lab
+UsePreviousAppDir=no
+DisableDirPage=yes
 PrivilegesRequired=admin
 MinVersion=10.0.19045
 #if Runtime == "win-x64"
@@ -70,6 +72,10 @@ function PrepareToInstall(var NeedsRestart: Boolean): String;
 var Path: String;
 begin
   Result := '';
+  if CompareText(ExpandConstant('{app}'), ExpandConstant('{autopf}\AudioSwitch Login Lab')) <> 0 then begin
+    Result := '登录实验组件必须安装到受保护的 Program Files 目录，不支持自定义位置。';
+    Exit;
+  end;
   Path := ExpandConstant('{app}\AudioSwitch.LoginBridge.exe');
   if FileExists(Path) and not BridgeCommand(Path, '--stop-service') then
     Result := '无法停止 AudioSwitch 登录桥接服务。请重启后重试。';

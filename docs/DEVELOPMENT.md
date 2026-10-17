@@ -108,3 +108,7 @@ IPC 为固定版本命名管道，仅本机 SYSTEM/管理员可连接，拒绝�
 CI 验证服务安装、启动、停止、删除；构造管理员测试绑定，确保普通测试进程不是 LogonUI 时拿不到允许提交的结果，服务不存在时拒绝。协议测试覆盖正确结果、错误 nonce/手机/会话/版本、过期和未来时间。保护密码序列化等原有检查继续保留。正向蓝牙验证和真实登录不在 CI 测试范围；不能把这些失败路径测试写成端到端自动解锁通过。
 
 资料：[蓝牙套接字选项](https://learn.microsoft.com/en-us/windows/win32/bluetooth/bluetooth-and-socket-options)、[管道客户端进程](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeclientprocessid)、[管道服务端进程](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-getnamedpipeserverprocessid)、[用户会话令牌](https://learn.microsoft.com/en-us/windows/win32/api/wtsapi32/nf-wtsapi32-wtsqueryusertoken)。
+
+0.3.5 发行代码：`4ed729d8449666ff24b36ff81f2e6bb4f7c0736d`。[Windows CI 39024461210](https://github.com/wuha-like-sleep/AudioSwitch/actions/runs/39024461210) 三架构构建通过，x64 服务安装/重复安装升级/启动/停止/删除、缺损绑定拒绝、普通进程拒绝和服务不可用拒绝通过。仍无真实手机或真实账户认证成功记录。
+
+系统服务安装固定为原生 Program Files 下的 AudioSwitch Login Lab，不接受自定义目录；管理员工具也核对自身路径才允许注册服务。CI 验证自定义可写目录和开发目录中的松散工具不能注册服务。
