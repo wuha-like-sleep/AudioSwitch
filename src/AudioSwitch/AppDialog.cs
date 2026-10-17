@@ -32,22 +32,48 @@ internal sealed class AppDialog : ChromeForm
     public static DialogResult Show(string text, string title, MessageBoxButtons buttons = MessageBoxButtons.OK, MessageBoxIcon icon = MessageBoxIcon.Information)
     {
         using var dialog = new AppDialog(text, title, buttons, icon);
-        return dialog.ShowDialog();
+        return dialog.Present();
     }
     public static DialogResult Show(IWin32Window owner, string text, string title)
     {
         using var dialog = new AppDialog(text, title, MessageBoxButtons.OK, MessageBoxIcon.Information);
-        return dialog.ShowDialog(owner);
+        return dialog.Present(owner);
     }
     public static bool ConfirmAction(IWin32Window owner, string title, string text, string accept)
     {
         using var dialog = new AppDialog(text, title, MessageBoxButtons.YesNo, MessageBoxIcon.Question, accept, "取消", true);
-        return dialog.ShowDialog(owner) == DialogResult.Yes;
+        return dialog.Present(owner) == DialogResult.Yes;
     }
     public static bool ConfirmDiscard(IWin32Window owner)
     {
         using var dialog = new AppDialog("你修改了设置，但还没有保存。\n\n关闭后将保留原来的设置，刚才的修改会被放弃。", "有未保存的修改", MessageBoxButtons.YesNo, MessageBoxIcon.Question, "放弃修改", "继续编辑", true);
-        return dialog.ShowDialog(owner) == DialogResult.Yes;
+        return dialog.Present(owner) == DialogResult.Yes;
+    }
+    internal static Form? ResolveOwner(IWin32Window? requested = null)
+    {
+        var owner = requested as Form;
+        owner ??= Form.ActiveForm is { Visible: true, IsDisposed: false } active && active is not SwitchToast && active is not UpdateProgressForm ? active : null;
+        owner ??= Application.OpenForms.Cast<Form>().LastOrDefault(f => f.Visible && !f.IsDisposed && f is not SwitchToast && f is not UpdateProgressForm);
+        while (owner != null)
+        {
+            var child = owner.OwnedForms.LastOrDefault(f => f.Visible && !f.IsDisposed && f is not SwitchToast && f is not UpdateProgressForm);
+            if (child == null) break;
+            owner = child;
+        }
+        return owner;
+    }
+    private DialogResult Present(IWin32Window? requested = null)
+    {
+        var owner = ResolveOwner(requested);
+        StartPosition = owner == null ? FormStartPosition.CenterScreen : FormStartPosition.CenterParent;
+        ShowInTaskbar = owner == null;
+        if (owner?.WindowState == FormWindowState.Minimized) owner.WindowState = FormWindowState.Normal;
+        return owner == null ? ShowDialog() : ShowDialog(owner);
+    }
+    protected override void OnShown(EventArgs e)
+    {
+        base.OnShown(e);
+        BringToFront(); Activate();
     }
     protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
     {

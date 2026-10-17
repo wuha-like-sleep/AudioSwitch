@@ -176,6 +176,15 @@ internal static class SettingsStore
             || LoginComponentInstaller.VersionMatches("0.3.8-preview.1", "0.3.10-preview.1")
             || LoginComponentInstaller.VersionMatches("未知", "0.3.10-preview.1"))
             throw new InvalidOperationException("Login component version mismatch was accepted.");
+        using (var parentWindow = new Form())
+        using (var childWindow = new Form())
+        {
+            parentWindow.Show(); childWindow.Show(parentWindow);
+            if (AppDialog.ResolveOwner(parentWindow) != childWindow) throw new InvalidOperationException("New dialog did not select the latest owned window.");
+            childWindow.Close();
+            if (AppDialog.ResolveOwner(parentWindow) != parentWindow) throw new InvalidOperationException("Closed child remained the dialog owner.");
+            parentWindow.Close();
+        }
         string diagnostic = Diagnostics.Build(second, true);
         if (!diagnostic.Contains(UpdateService.CurrentTag) || diagnostic.Contains(second.Headphones) || diagnostic.Contains(second.Speakers))
             throw new InvalidOperationException("Diagnostics version or device identifier privacy failed.");
