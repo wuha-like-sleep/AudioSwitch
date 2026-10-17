@@ -26,9 +26,9 @@ GitHub Actions 自动构建三种架构的安装包，更新源绑定到实际�
 x64 作业额外验证静默安装、自启动注册、应用运行和卸载清理。
 
 1. 更新 `.csproj` 中的版本号，提交代码。
-2. 推送同版本标签，如 `v0.2.1`。
+2. 推送同版本标签，如 `v0.3.0-preview.1`。
 3. 自动构建完成后下载安装包，在 Windows 真机验证。
-4. 创建同版本正式 GitHub Release，上传三个 `AudioSwitch-Setup-*.exe` 安装包并填写更新说明。
+4. 创建同版本 GitHub Release（测试版勾选 prerelease），上传三个 `AudioSwitch-Setup-*.exe` 安装包并填写更新说明。
 
 GitHub 为上传的资产生成 SHA-256 digest。只有包含校验信息且架构匹配的安装包才能自动更新。
 应用与安装器尚未配置代码签名证书。
@@ -39,3 +39,11 @@ GitHub 为上传的资产生成 SHA-256 digest。只有包含校验信息且架�
 `tests/installer-smoke.ps1` 用于独立 Windows CI 环境，验证静默安装、自启动注册、界面预览、进程运行和卸载清理。该脚本会实际安装和卸载应用，不应在个人日常环境中运行。
 
 公开测试版使用 `v主版本.次版本.修订号-preview.序号` 标签，并在项目的 `InformationalVersion` 中设置相同版本标识。测试版更新检查同时接收测试版和正式版，正式版仅接收正式更新。
+
+## 手机离开锁屏
+
+目标框架为 `net8.0-windows10.0.19041.0`，使用 Windows SDK 的 `DeviceWatcher` 读取已配对的经典蓝牙和 BLE 关联端点。首次枚举可能携带缓存，不用缓存信号启动信号锁屏；只有更新事件中的实时负值信号参与判定，超过 20 秒暂停信号模式。信号值不映射成米数，不保证所有手机提供该属性。
+
+`ProximityGuard` 独立验证首次确认、持续离开、重连取消、信号过期和单次触发；CI 不调用真实锁屏。生产环境通过 `LockWorkStation` 锁定，系统解锁、休眠恢复和编辑设置时重置判定。需要在 Windows 10/11 真机验证实际手机协议、蓝牙关闭/恢复、手机休眠、信号更新频率和系统锁屏行为。
+
+参考：[DeviceWatcher 蓝牙选择器](https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.bluetoothdevice.getdeviceselectorfrompairingstate)、[SignalStrength 属性](https://learn.microsoft.com/en-us/windows/win32/properties/props-system-devices-aep-signalstrength)、[LockWorkStation](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-lockworkstation)。
