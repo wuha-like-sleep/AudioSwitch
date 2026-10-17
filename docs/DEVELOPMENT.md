@@ -143,3 +143,5 @@ CI 检查虚构记录的 DPAPI 往返、密文不含测试密码、受限令牌�
 [真机验收步骤](UNLOCK-VALIDATION.md)。没有真实 iPhone / 微软账户测试机，不能把 CI 通过称为端到端解锁成功。
 
 修正磁贴 SetSelected 始终返回 FALSE 的行为：仅 AutomaticReady 的短时许可有效且没有手动编辑时请求自动提交，与 GetCredentialCount 条件一致。[Microsoft SetSelected 文档](https://learn.microsoft.com/en-us/windows/win32/api/credentialprovider/nf-credentialprovider-icredentialprovidercredential-setselected) 明确系统仍可能展示登录按钮，不能承诺任何系统策略下都无需确认。
+
+0.3.7 Preview 1 发行代码：`4120246550dec2ca2ae25f36605b6f88e27f496f`。[Windows CI 39026758882](https://github.com/wuha-like-sleep/AudioSwitch/actions/runs/39026758882) 三架构构建成功；x64 安装、系统登录入口保留、服务和存储检查，以及诊断状态 / 子状态保存、ReportResult 空输出回归测试通过。真机自动解锁仍待验证。
