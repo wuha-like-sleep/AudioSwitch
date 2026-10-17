@@ -8,6 +8,8 @@ internal class ChromeForm : Form
     private readonly Label caption = new();
     public ChromeForm()
     {
+        AutoScaleDimensions = new SizeF(96, 96);
+        AutoScaleMode = AutoScaleMode.Dpi;
         FormBorderStyle = FormBorderStyle.None;
         var bar = new TableLayoutPanel
         {
