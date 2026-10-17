@@ -1,5 +1,7 @@
 // Copyright (c) 2026 wuha-like-sleep. Licensed under the MIT license.
+#define SECURITY_WIN32
 #include <windows.h>
+#include <security.h>
 #include <credentialprovider.h>
 #include <wincred.h>
 #include <propkey.h>
@@ -74,10 +76,21 @@ void Verify(IClassFactory* factory) {
         auto start = reinterpret_cast<const BYTE*>(testPassword);
         auto end = start + sizeof(testPassword) - sizeof(wchar_t);
         Check(std::search(serialization.rgbSerialization, serialization.rgbSerialization + serialization.cbSerialization, start, end) == serialization.rgbSerialization + serialization.cbSerialization, "Serialized buffer contains no plaintext test password");
-        wchar_t name[512]{}, domain[512]{}, secret[1025]{}; DWORD nameSize = 512, domainSize = 512, secretSize = 1025;
-        Check(CredUnPackAuthenticationBufferW(CRED_PACK_PROTECTED_CREDENTIALS, serialization.rgbSerialization, serialization.cbSerialization, name, &nameSize, domain, &domainSize, secret, &secretSize) != FALSE, "Windows can unpack protected identity credential");
-        Check(wcscmp(secret, testPassword) == 0 && *name, "Protected roundtrip");
-        SecureZeroMemory(secret, sizeof(secret)); SecureZeroMemory(serialization.rgbSerialization, serialization.cbSerialization); CoTaskMemFree(serialization.rgbSerialization); CoTaskMemFree(status);
+        // Identity-provider credentials unpack to marshaled strings, not a plaintext password.
+        // Validate the EX2 structure and inspect a separate, explicitly decrypted SSPI copy.
+        auto original = reinterpret_cast<PSEC_WINNT_AUTH_IDENTITY_OPAQUE>(serialization.rgbSerialization);
+        Check(SspiValidateAuthIdentity(original) == SEC_E_OK, "Valid SSPI identity");
+        PSEC_WINNT_AUTH_IDENTITY_OPAQUE decrypted = nullptr;
+        Check(SspiCopyAuthIdentity(original, &decrypted) == SEC_E_OK, "Copy protected identity");
+        Check(SspiIsAuthIdentityEncrypted(decrypted) != FALSE, "Identity is encrypted");
+        Check(SspiDecryptAuthIdentityEx(SEC_WINNT_AUTH_IDENTITY_ENCRYPT_SAME_LOGON, decrypted) == SEC_E_OK, "Decrypt same-session test identity");
+        ULONG decodedSize = 0; char* decoded = nullptr;
+        Check(SspiMarshalAuthIdentity(decrypted, &decodedSize, &decoded) == SEC_E_OK, "Marshal decrypted test identity");
+        const auto decodedBytes = reinterpret_cast<const BYTE*>(decoded);
+        Check(std::search(decodedBytes, decodedBytes + decodedSize, start, end) != decodedBytes + decodedSize, "Recovered exact test password from protected identity");
+        SecureZeroMemory(decoded, decodedSize); SspiLocalFree(decoded);
+        SspiZeroAuthIdentity(decrypted); SspiFreeAuthIdentity(decrypted);
+        SecureZeroMemory(serialization.rgbSerialization, serialization.cbSerialization); CoTaskMemFree(serialization.rgbSerialization); CoTaskMemFree(status);
         PWSTR remaining = nullptr; Check(SUCCEEDED(credential->GetStringValue(2, &remaining)) && !*remaining, "Password cleared after serialization"); CoTaskMemFree(remaining);
         Check(SUCCEEDED(credential->SetStringValue(2, testPassword)), "Set before deselect"); credential->SetDeselected();
         credential->GetStringValue(2, &remaining); Check(!*remaining, "Deselect clears password"); CoTaskMemFree(remaining);
