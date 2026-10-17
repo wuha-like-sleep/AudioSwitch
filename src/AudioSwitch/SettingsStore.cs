@@ -30,7 +30,7 @@ internal static class SettingsStore
         using (var locked = new FileStream(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
         {
             bool rejected = false;
-            try { Write(path, first); } catch (IOException) { rejected = true; }
+            try { Write(path, first); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { rejected = true; }
             if (!rejected) throw new InvalidOperationException("Locked settings should reject replacement.");
         }
         if (Read(path) != second) throw new InvalidOperationException("Failed save changed the old settings.");
