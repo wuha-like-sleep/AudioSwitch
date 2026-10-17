@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text.Json;
 
 namespace AudioSwitch;
 
@@ -11,6 +10,12 @@ internal static class Program
         if (args.Length == 2 && args[0] == "--verify-audio")
         {
             try { AudioDevices.VerifyInterfaces(); File.WriteAllText(args[1], "Audio interfaces verified."); }
+            catch (Exception ex) { File.WriteAllText(args[1], ex.ToString()); Environment.ExitCode = 1; }
+            return;
+        }
+        if (args.Length == 2 && args[0] == "--verify-settings")
+        {
+            try { SettingsStore.Verify(args[1]); File.WriteAllText(args[1], "Settings, hotkey and startup checks passed."); }
             catch (Exception ex) { File.WriteAllText(args[1], ex.ToString()); Environment.ExitCode = 1; }
             return;
         }
@@ -54,7 +59,7 @@ internal sealed class TrayContext : ApplicationContext
         updates = new UpdateService(message => Notify(message));
         try
         {
-            if (File.Exists(configPath)) settings = JsonSerializer.Deserialize<Settings>(File.ReadAllText(configPath));
+            settings = SettingsStore.Read(configPath);
         }
         catch (Exception ex) { Notify("配置读取失败，请重新选择设备。" + ex.Message, true); }
         hotkey = new HotkeyWindow(Switch);
@@ -113,16 +118,13 @@ internal sealed class TrayContext : ApplicationContext
             { Notify("该快捷键被占用或不可用，已保留原快捷键。请重新设置。", true); return; }
             try
             {
-                StartupService.SetEnabled(form.StartWithWindows);
-                Directory.CreateDirectory(Path.GetDirectoryName(configPath)!);
-                string temp = configPath + ".tmp";
-                File.WriteAllText(temp, JsonSerializer.Serialize(candidate, new JsonSerializerOptions { WriteIndented = true }));
-                File.Move(temp, configPath, true);
+                if (form.StartWithWindows != oldStartup) StartupService.SetEnabled(form.StartWithWindows);
+                SettingsStore.Write(configPath, candidate);
             }
             catch
             {
                 hotkey.TryChange(oldModifiers, oldKey);
-                StartupService.SetEnabled(oldStartup);
+                if (StartupService.Enabled != oldStartup) StartupService.SetEnabled(oldStartup);
                 throw;
             }
             settings = candidate;

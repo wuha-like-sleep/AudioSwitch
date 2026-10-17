@@ -17,6 +17,9 @@ foreach ($service in @('AudioEndpointBuilder', 'Audiosrv')) {
 $audioResult = Join-Path $PSScriptRoot '../artifacts/audio-interfaces.txt'
 $audioCheck = Start-Process $app -ArgumentList '--verify-audio', "`"$audioResult`"" -Wait -PassThru
 if ($audioCheck.ExitCode -ne 0) { throw (Get-Content $audioResult -Raw) }
+$settingsResult = Join-Path $PSScriptRoot '../artifacts/settings-checks.txt'
+$settingsCheck = Start-Process $app -ArgumentList '--verify-settings', "`"$settingsResult`"" -Wait -PassThru
+if ($settingsCheck.ExitCode -ne 0) { throw (Get-Content $settingsResult -Raw) }
 # Render the actual settings window with sample devices, independent of CI audio hardware.
 $preview = Start-Process $app -ArgumentList '--preview' -PassThru
 try {
