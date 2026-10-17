@@ -55,7 +55,7 @@ internal sealed class DeviceSelectionForm : ChromeForm
             toggle.CheckedChanged += (_, _) =>
             {
                 if (toggle.Checked) selected.Add(device); else selected.RemoveAll(d => d.Id == device.Id);
-                BeginInvoke(Render);
+                BeginInvoke(() => { if (!IsDisposed) Render(); });
             };
             layout.Controls.Add(toggle, 0, 0);
             layout.Controls.Add(new Label { Text = (index >= 0 ? $"顺序 {index + 1} · " : "未加入循环 · ") + (online ? "已连接" : "未连接，保留选择"), Dock = DockStyle.Fill, ForeColor = online ? Color.FromArgb(27, 139, 103) : Theme.Muted, Padding = new Padding(44, 0, 0, 0), AutoEllipsis = true }, 0, 1);

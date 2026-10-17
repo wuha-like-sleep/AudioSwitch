@@ -204,6 +204,11 @@ internal static class SettingsStore
         weak = weak with { SignalAt = now.AddSeconds(23) }; guard.Evaluate(config, weak, now.AddSeconds(23));
         weak = weak with { SignalAt = now.AddSeconds(38) };
         if (!guard.Evaluate(config, weak, now.AddSeconds(38)).ShouldLock) throw new InvalidOperationException("Fresh sustained weak signal did not trigger lock.");
+        guard.Reset();
+        guard.Evaluate(config, connected with { Connected = false }, now);
+        guard.Evaluate(config, weak with { Connected = false, SignalAt = now.AddSeconds(1) }, now.AddSeconds(1));
+        if (!guard.Evaluate(config, weak with { Connected = false, SignalAt = now.AddSeconds(16) }, now.AddSeconds(16)).ShouldLock)
+            throw new InvalidOperationException("Fresh signal mode incorrectly required an active audio connection.");
         guard.Reset(); guard.Evaluate(config, connected, now);
         if (guard.Evaluate(config, null, now.AddSeconds(1)).ShouldLock) throw new InvalidOperationException("Missing device status triggered lock.");
         if (guard.Evaluate(config with { Enabled = false }, disconnected, now.AddSeconds(90)).ShouldLock) throw new InvalidOperationException("Disabled proximity triggered lock.");

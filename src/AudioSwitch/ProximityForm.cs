@@ -58,7 +58,7 @@ internal sealed class ProximityForm : ChromeForm
     private void FillPhones(string preferred)
     {
         phone.Items.Clear();
-        foreach (var item in read()) phone.Items.Add(new Choice(item.Id, item.Name));
+        foreach (var item in read()) phone.Items.Add(new Choice(item.Id, item.Name + (item.Connected == true ? " · 已连接" : " · 未连接")));
         var match = phone.Items.Cast<Choice>().FirstOrDefault(c => c.Id == preferred);
         if (match == null && preferred.Length > 0) { match = new Choice(preferred, "已保存的手机 · 暂未识别"); phone.Items.Add(match); }
         phone.SelectedItem = match;
