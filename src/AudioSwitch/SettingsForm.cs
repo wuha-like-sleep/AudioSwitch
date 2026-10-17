@@ -7,6 +7,7 @@ internal sealed class SettingsForm : ChromeForm
     private static readonly Color Accent = Theme.Accent;
     private readonly ComboBox headphones = DevicePicker();
     private readonly ComboBox speakers = DevicePicker();
+    private readonly ComboBox toastMonitor = DevicePicker();
     private readonly Toggle startup = new() { Text = "登录 Windows 后自动启动" };
     private readonly Toggle autoUpdate = new() { Text = "启动时检查新版本" };
     private uint modifiers;
@@ -39,7 +40,7 @@ internal sealed class SettingsForm : ChromeForm
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, Padding = new Padding(28), AutoScroll = true };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        foreach (int height in new[] { 88, 48, 156, 154, 72, 64 }) root.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
+        foreach (int height in new[] { 80, 48, 156, 200, 48, 64 }) root.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         var hero = new TableLayoutPanel
         {
             Dock = DockStyle.Fill, BackColor = BackColor, ColumnCount = 3, RowCount = 2,
@@ -83,9 +84,9 @@ internal sealed class SettingsForm : ChromeForm
         cards.Controls.Add(DeviceCard("音箱", "外放音乐与共享播放", speakers), 1, 0);
         root.Controls.Add(cards, 0, 2);
         var optionSurface = new RoundedPanel { Dock = DockStyle.Fill, Padding = new Padding(20), Margin = new Padding(0, 16, 0, 0) };
-        var options = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = Padding.Empty, ColumnCount = 2, RowCount = 3, Margin = Padding.Empty };
+        var options = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = Padding.Empty, ColumnCount = 2, RowCount = 4, Margin = Padding.Empty };
         options.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45)); options.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
-        options.RowStyles.Add(new RowStyle(SizeType.Absolute, 28)); options.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); options.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+        options.RowStyles.Add(new RowStyle(SizeType.Absolute, 28)); options.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); options.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); options.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
         options.Controls.Add(new Label { Text = "偏好设置", AutoSize = true, Font = new Font(Font, FontStyle.Bold) }, 0, 0); options.SetColumnSpan(options.GetControlFromPosition(0, 0)!, 2);
         options.Controls.Add(new Label { Text = "切换快捷键", AutoSize = true, Padding = new Padding(0, 6, 0, 0) }, 0, 1);
         var capture = new TextBox { ReadOnly = true, Dock = DockStyle.Top, BackColor = Color.FromArgb(240, 244, 255), ForeColor = Accent, BorderStyle = BorderStyle.FixedSingle, Text = HotkeyWindow.Describe(modifiers, hotkey), AccessibleName = "点击后按下新快捷键" };
@@ -97,9 +98,12 @@ internal sealed class SettingsForm : ChromeForm
         };
         options.Controls.Add(capture, 1, 1);
         options.Controls.Add(startup, 0, 2); options.Controls.Add(autoUpdate, 1, 2);
+        options.Controls.Add(new Label { Text = "切换提示屏幕", AutoSize = true, Padding = new Padding(0, 8, 0, 0) }, 0, 3);
+        options.Controls.Add(toastMonitor, 1, 3);
+        FillMonitors(settings?.ToastMonitor ?? "");
         optionSurface.Controls.Add(options);
         root.Controls.Add(optionSurface, 0, 3);
-        root.Controls.Add(new Label { Text = "点击快捷键框后，按 Ctrl / Alt + 字母、数字或 F1–F11，可加 Shift。\n切换播放与通信输出，麦克风保持原设置。保存后即可在托盘使用。", ForeColor = Muted, Dock = DockStyle.Fill, Padding = new Padding(0, 16, 0, 0) }, 0, 4);
+        root.Controls.Add(new Label { Text = "点击快捷键框后，按 Ctrl / Alt + 字母、数字或 F1–F11，可加 Shift。\n切换播放与通信输出，麦克风保持原设置。保存后即可在托盘使用。", ForeColor = Muted, Dock = DockStyle.Fill, Padding = new Padding(0, 8, 0, 0) }, 0, 4);
         var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false, Margin = Padding.Empty };
         var save = ActionButton("保存设置", true);
         var cancel = ActionButton("取消", false); cancel.DialogResult = DialogResult.Cancel;
@@ -109,7 +113,7 @@ internal sealed class SettingsForm : ChromeForm
         Fill(devices, settings?.Headphones, settings?.Speakers);
         refresh.Click += (_, _) =>
         {
-            try { Fill(AudioDevices.List(), (headphones.SelectedItem as Choice)?.Id, (speakers.SelectedItem as Choice)?.Id); }
+            try { Fill(AudioDevices.List(), (headphones.SelectedItem as Choice)?.Id, (speakers.SelectedItem as Choice)?.Id); FillMonitors((toastMonitor.SelectedItem as Choice)?.Id ?? ""); }
             catch (Exception ex) { AppDialog.Show(this, ex.Message, "刷新失败"); }
         };
         save.Click += (_, _) =>
@@ -117,8 +121,27 @@ internal sealed class SettingsForm : ChromeForm
             if (headphones.SelectedItem is not Choice h || speakers.SelectedItem is not Choice s)
             { AppDialog.Show(this, "请选择耳机和音箱。", "设备未选全"); return; }
             if (h.Id == s.Id) { AppDialog.Show(this, "耳机和音箱必须是两个不同的输出设备。", "设备重复"); return; }
-            Selection = new Settings(h.Id, s.Id, modifiers, hotkey, autoUpdate.Checked); DialogResult = DialogResult.OK;
+            Selection = new Settings(h.Id, s.Id, modifiers, hotkey, autoUpdate.Checked, (toastMonitor.SelectedItem as Choice)?.Id ?? ""); DialogResult = DialogResult.OK;
         };
+    }
+    private void FillMonitors(string preferred)
+    {
+        toastMonitor.Items.Clear();
+        toastMonitor.Items.Add(new Choice("", "主显示器（跟随系统主屏）"));
+        int number = 0;
+        foreach (var screen in Screen.AllScreens)
+        {
+            number++;
+            toastMonitor.Items.Add(new Choice(screen.DeviceName,
+                $"显示器 {number}{(screen.Primary ? " · 主屏" : "")} · {screen.Bounds.Width} × {screen.Bounds.Height}"));
+        }
+        var match = toastMonitor.Items.Cast<Choice>().FirstOrDefault(c => c.Id == preferred);
+        if (match == null)
+        {
+            match = new Choice(preferred, "指定屏幕未连接 · 暂用主屏");
+            toastMonitor.Items.Add(match);
+        }
+        toastMonitor.SelectedItem = match;
     }
     private static ComboBox DevicePicker() => new DeviceComboBox();
     private Panel DeviceCard(string title, string subtitle, ComboBox picker)

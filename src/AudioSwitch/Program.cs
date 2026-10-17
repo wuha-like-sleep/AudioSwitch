@@ -39,12 +39,17 @@ internal static class Program
         {
             AppDialog.Show($"当前版本 {UpdateService.CurrentTag} 已是最新版本。\n\n更新通道：测试版与正式版", "已经是最新版本"); return;
         }
+        if (args.Contains("--preview-toast"))
+        {
+            using var preview = new SwitchToast("耳机", "USB 耳机 · Headphones", "", 15000);
+            Application.Run(preview); return;
+        }
         using var context = new TrayContext(args.Contains("--startup"));
         Application.Run(context);
     }
 }
 
-internal sealed record Settings(string Headphones, string Speakers, uint HotkeyModifiers = 3, Keys HotkeyKey = Keys.F11, bool AutoCheckUpdates = true);
+internal sealed record Settings(string Headphones, string Speakers, uint HotkeyModifiers = 3, Keys HotkeyKey = Keys.F11, bool AutoCheckUpdates = true, string ToastMonitor = "");
 
 internal sealed class TrayContext : ApplicationContext
 {
@@ -172,7 +177,7 @@ internal sealed class TrayContext : ApplicationContext
             AudioDevices.SetDefault(id);
             RefreshStatus();
             toast?.Close();
-            toast = new SwitchToast(id == settings?.Headphones ? "耳机" : "音箱", device.Name);
+            toast = new SwitchToast(id == settings?.Headphones ? "耳机" : "音箱", device.Name, settings?.ToastMonitor ?? "");
             toast.Show();
         }
         catch (Exception ex) { Notify("切换未完成，部分默认输出可能已经改变。请检查 Windows 声音设置。\n" + ex.Message, true); }

@@ -22,7 +22,7 @@ internal static class SettingsStore
     {
         string path = Path.Combine(Path.GetDirectoryName(resultPath)!, "settings-roundtrip.json");
         var first = new Settings("test-headphones", "test-speakers");
-        var second = new Settings("second-headphones", "test-speakers", 7, Keys.F10, false);
+        var second = new Settings("second-headphones", "test-speakers", 7, Keys.F10, false, "DISPLAY2");
         Write(path, first);
         if (Read(path) != first) throw new InvalidOperationException("Initial settings roundtrip failed.");
         Write(path, second);
@@ -63,6 +63,20 @@ internal static class SettingsStore
         {
             checking.Show(); checking.Close();
             if (!checking.Token.IsCancellationRequested) throw new InvalidOperationException("Closing update progress did not cancel the request.");
+        }
+        var screens = new[] {
+            new MonitorInfo("primary", true, new Rectangle(0, 0, 1920, 1040)),
+            new MonitorInfo("left", false, new Rectangle(-2560, -200, 2560, 1400))
+        };
+        if (ToastPlacement.Select("", screens).Id != "primary" || ToastPlacement.Select("left", screens).Id != "left"
+            || ToastPlacement.Select("unplugged", screens).Id != "primary")
+            throw new InvalidOperationException("Toast monitor preference or fallback failed.");
+        foreach (var monitor in screens)
+        {
+            var size = new Size(570, 144);
+            var point = ToastPlacement.Position(monitor.WorkArea, size, 36);
+            if (!monitor.WorkArea.Contains(new Rectangle(point, size)))
+                throw new InvalidOperationException("Toast placement escaped the selected screen.");
         }
         File.Delete(path);
     }
