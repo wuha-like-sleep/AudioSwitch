@@ -10,7 +10,7 @@
 一个快捷键，循环切换 USB、蓝牙、HDMI 等输出设备。
 
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-465CE8?logo=windows&logoColor=white)](#安装)
-[![Release](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-v0.3.1--preview.1-465CE8)](https://github.com/wuha-like-sleep/AudioSwitch/releases)
+[![Release](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-v0.3.2--preview.1-465CE8)](https://github.com/wuha-like-sleep/AudioSwitch/releases)
 [![Build](https://github.com/wuha-like-sleep/AudioSwitch/actions/workflows/build.yml/badge.svg)](https://github.com/wuha-like-sleep/AudioSwitch/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/License-MIT-22A77A)](LICENSE)
 
@@ -22,7 +22,7 @@
 
 <br />
 
-![AudioSwitch 设置界面](docs/images/settings-0.3.1-preview1.png)
+![AudioSwitch 设置界面](docs/images/settings-0.3.2-preview1.png)
 
 <div align="center"><sub>Windows 实际运行截图 · 展示使用示例设备</sub></div>
 
@@ -33,33 +33,33 @@
 
 **管理输出设备**
 
-![多设备循环列表](docs/images/devices-0.3.1-preview1.png)
+![多设备循环列表](docs/images/devices-0.3.2-preview1.png)
 
 **手机离开锁屏**
 
-![蓝牙手机锁屏设置](docs/images/proximity-0.3.1-preview1.png)
+![蓝牙手机锁屏设置](docs/images/proximity-0.3.2-preview1.png)
 
 <sub>手机状态为界面演示数据，真实连接和锁屏需在配对手机上验证。</sub>
 
 **更新下载**
 
-![更新下载界面](docs/images/update-0.3.1-preview1.png)
+![更新下载界面](docs/images/update-0.3.2-preview1.png)
 
 **版本检查结果**
 
-![版本提示界面](docs/images/dialog-0.3.1-preview1.png)
+![版本提示界面](docs/images/dialog-0.3.2-preview1.png)
 
 **提示样式**
 
-![提示位置与停留时间](docs/images/style-0.3.1-preview1.png)
+![提示位置与停留时间](docs/images/style-0.3.2-preview1.png)
 
 **切换提示**
 
-![切换提示](docs/images/toast-0.3.1-preview1.png)
+![切换提示](docs/images/toast-0.3.2-preview1.png)
 
 **安装向导**
 
-![安装向导](docs/images/installer-0.3.1-preview1.png)
+![安装向导](docs/images/installer-0.3.2-preview1.png)
 
 </details>
 
@@ -70,6 +70,8 @@
 | 托盘点击或全局快捷键，按列表循环切换在线设备。 | 勾选任意数量的输出设备，自定义快捷键与循环顺序。 | 切换提示可固定到指定屏幕，不抢焦点、不拦截鼠标。 |
 | **登录即用** | **更新更方便** | **轻量安装** |
 | 可选开机自启动，登录后安静地留在托盘。 | 检查新版本、查看说明、下载安装包并校验。 | 当前用户安装，无需管理员权限，自带运行组件。 |
+| **手机离开锁屏** | **信号阈值与测试** | **设备管理** |
+| 可选断连或实时弱信号判定，持续离开后锁屏，托盘可暂停。 | 自定义阈值与恢复缓冲、参考标定，以及不会锁屏的测试模式。 | 名称搜索、循环排序、按筛选结果批量加入或移出。 |
 
 ## 安装
 
@@ -77,9 +79,9 @@
 
 | 你的电脑 | 下载 |
 | :--- | :--- |
-| Intel / AMD 64 位电脑 · 大多数用户选择此项 | **[Windows x64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.1-preview.1/AudioSwitch-Setup-win-x64.exe)** |
-| Windows ARM64 电脑 | [Windows ARM64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.1-preview.1/AudioSwitch-Setup-win-arm64.exe) |
-| Windows 10 32 位电脑 | [Windows x86](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.1-preview.1/AudioSwitch-Setup-win-x86.exe) |
+| Intel / AMD 64 位电脑 · 大多数用户选择此项 | **[Windows x64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.2-preview.1/AudioSwitch-Setup-win-x64.exe)** |
+| Windows ARM64 电脑 | [Windows ARM64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.2-preview.1/AudioSwitch-Setup-win-arm64.exe) |
+| Windows 10 32 位电脑 | [Windows x86](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.2-preview.1/AudioSwitch-Setup-win-x86.exe) |
 
 运行安装向导，选择安装位置、自启动和桌面快捷方式。程序默认安装到当前用户目录，安装完成后从开始菜单打开 **AudioSwitch**。
 
@@ -87,7 +89,7 @@
 
 ## 三步开始使用
 
-1. **管理设备** — 连接输出设备，点击“管理设备”勾选参加循环的设备，并用上下按钮调整顺序。
+1. **管理设备** — 连接输出设备，点击“管理设备”勾选参加循环的设备，并用上下按钮调整顺序。可搜索名称，并批量加入或移出当前筛选结果。
 2. **设置快捷键** — 保留默认 `Ctrl + Alt + F11`，或点击输入框直接按下新组合键。
 3. **保存，开始切换** — 点击托盘图标，或按下快捷键。设置页的“立即切换”可测试已保存的配置，托盘右键菜单可直接选择某台设备。
 
@@ -105,9 +107,13 @@
 
 **关于设备。** 同时切换播放和通信的默认输出，不修改麦克风或音量。当前循环设备断开时，尝试按列表顺序回退到可用设备；重新连接不会抢回输出。设置页自动刷新连接状态并显示当前输出；已选设备断开后保留配置，仍可保存快捷键等偏好。托盘菜单勾选当前输出，未连接设备不可点击。只有一台可用时选择可用设备，已在使用时给出提示。更换 USB 端口或驱动后，可刷新并重新选择设备。
 
-**关于手机离开锁屏。** 从设置页右上角进入“离开锁屏”。先在 Windows 配对手机，确认页面显示连接状态；信号模式还需确认能收到实时信号。选择断开连接、弱信号或任一条件，持续时间可选 15、30、60、120 秒。点击完成后仍需在主设置页保存，并关闭设置窗口才开始监测。功能默认关闭，托盘可随时暂停。开启前可点击“测试判定”观察连接、实时信号和倒计时；测试不会执行锁屏，点击“停止测试”结束。
+**关于手机离开锁屏。** 从设置页右上角进入“离开锁屏”。先在 Windows 配对手机，确认页面显示连接状态；信号模式还需确认能收到实时信号。选择断开连接、弱信号或任一条件，持续时间可选 15、30、60、120 秒。点击完成后仍需在主设置页保存，并关闭设置窗口才开始监测。功能默认关闭，托盘可随时暂停。
+
+**关于信号阈值。** 信号阈值支持 -120 至 -20 的自定义负值，恢复缓冲可选 1–20；倒计时开始后，信号需越过恢复线才取消，避免在阈值附近反复波动。状态区同时展示当前信号、触发阈值和恢复条件。“参考标定”使用最近 30 秒内最多 9 次实时读数，至少需要 3 次，取中位数减 15 作为可调整的参考阈值；当前信号过期时不进行标定。开启前可点击“测试判定”观察连接、实时信号和倒计时；测试不会执行锁屏，点击“停止测试”结束。
 
 启动、解锁或休眠恢复后需先检测到手机可用；瞬间断连不会立即锁屏，条件恢复会取消倒计时。设置编辑、休眠、已锁屏或监测异常期间暂停。只调用 Windows 锁屏，不自动解锁。信号值不等于精确距离；仅使用实时负值信号，过期或不可用时暂停信号判定，不能保证所有手机都支持。[Windows 信号属性说明](https://learn.microsoft.com/en-us/windows/win32/properties/props-system-devices-aep-signalstrength)
+
+**关于手机解锁。** 当前未实现自动解锁或手机确认解锁。返回电脑后请使用 Windows Hello、PIN 或密码；取消离开倒计时不会解除已经锁定的会话。仅 iPhone 蓝牙配对的解锁路线需要独立 Windows 登录认证组件及真机验证。
 
 **关于诊断。** 设置页的“诊断信息”可复制软件版本、系统架构、快捷键注册和音频设备状态，便于反馈问题。不会上传信息；分享前请检查设备名称。
 

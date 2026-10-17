@@ -47,3 +47,9 @@ GitHub 为上传的资产生成 SHA-256 digest。只有包含校验信息且架�
 `ProximityGuard` 独立验证首次确认、持续离开、重连取消、信号过期和单次触发；CI 不调用真实锁屏。生产环境通过 `LockWorkStation` 锁定，系统解锁、休眠恢复和编辑设置时重置判定。需要在 Windows 10/11 真机验证实际手机协议、蓝牙关闭/恢复、手机休眠、信号更新频率和系统锁屏行为。
 
 参考：[DeviceWatcher 蓝牙选择器](https://learn.microsoft.com/en-us/uwp/api/windows.devices.bluetooth.bluetoothdevice.getdeviceselectorfrompairingstate)、[SignalStrength 属性](https://learn.microsoft.com/en-us/windows/win32/properties/props-system-devices-aep-signalstrength)、[LockWorkStation](https://learn.microsoft.com/en-us/windows/win32/api/winuser/nf-winuser-lockworkstation)。
+
+## 手机解锁边界
+
+当前没有实现手机自动解锁或手机确认解锁。解除已经锁定的 Windows 会话需要系统登录认证；`DeviceWatcher` 的连接状态、名称和信号值不能直接作为解锁凭据。仅使用现有 iPhone 配对、不安装手机 App 的路线仍需独立验证：Windows Credential Provider 与受保护的认证通道、手机身份确认、账户类型兼容性、撤销/恢复方案，以及真实锁定会话测试。
+
+后续登录组件不得禁用 Windows 原有的密码、PIN 或 Windows Hello 提供程序；不得以模拟输入、明文配置或单纯名称/RSSI 匹配宣称完成认证。当前发行版只取消离开倒计时或调用系统锁屏，不会解锁会话。参考：[Windows Credential Providers](https://learn.microsoft.com/en-us/windows/win32/secauthn/credential-providers-in-windows)。
