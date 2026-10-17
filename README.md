@@ -22,7 +22,7 @@
 
 <br />
 
-![AudioSwitch 设置界面](docs/images/settings-0.3.9-preview1.png)
+![AudioSwitch 设置界面](docs/images/settings-0.3.10-preview1.png)
 
 <div align="center"><sub>Windows 实际运行截图 · 展示使用示例设备</sub></div>
 
@@ -33,45 +33,45 @@
 
 **管理输出设备**
 
-![多设备循环列表](docs/images/devices-0.3.9-preview1.png)
+![多设备循环列表](docs/images/devices-0.3.10-preview1.png)
 
 **手机离开锁屏**
 
-![蓝牙手机锁屏设置](docs/images/proximity-0.3.9-preview1.png)
+![蓝牙手机锁屏设置](docs/images/proximity-0.3.10-preview1.png)
 
 <sub>手机状态为界面演示数据，真实连接和锁屏需在配对手机上验证。</sub>
 
 **解锁链路研究检测**
 
-![解锁链路检测界面](docs/images/unlock-0.3.9-preview1.png)
+![解锁链路检测界面](docs/images/unlock-0.3.10-preview1.png)
 
 <sub>本检测只验证加密蓝牙连接，不执行解锁；自动提交需独立初始化，真实 iPhone 解锁尚未验证。</sub>
 
 **手机认证与 Windows 登录实验组件**
 
-![原生登录组件说明与安装入口](docs/images/login-0.3.9-preview1.png)
+![原生登录组件说明与安装入口](docs/images/login-0.3.10-preview1.png)
 
 <sub>绑定入口与实验范围；真实 iPhone、系统服务蓝牙和微软账户认证仍需真机验证。</sub>
 
 **更新下载**
 
-![更新下载界面](docs/images/update-0.3.9-preview1.png)
+![更新下载界面](docs/images/update-0.3.10-preview1.png)
 
 **版本检查结果**
 
-![版本提示界面](docs/images/dialog-0.3.9-preview1.png)
+![版本提示界面](docs/images/dialog-0.3.10-preview1.png)
 
 **提示样式**
 
-![提示位置与停留时间](docs/images/style-0.3.9-preview1.png)
+![提示位置与停留时间](docs/images/style-0.3.10-preview1.png)
 
 **切换提示**
 
-![切换提示](docs/images/toast-0.3.9-preview1.png)
+![切换提示](docs/images/toast-0.3.10-preview1.png)
 
 **安装向导**
 
-![安装向导](docs/images/installer-0.3.9-preview1.png)
+![安装向导](docs/images/installer-0.3.10-preview1.png)
 
 </details>
 
