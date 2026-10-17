@@ -21,15 +21,25 @@ internal sealed class SettingsForm : Form
         Font = new Font("Microsoft YaHei UI", 10);
         ForeColor = Ink; BackColor = Color.FromArgb(243, 246, 251);
         AutoScaleMode = AutoScaleMode.Dpi;
-        ClientSize = new Size(820, 740); MinimumSize = new Size(836, 779);
+        ClientSize = new Size(820, 660); MinimumSize = new Size(776, 680);
         StartPosition = FormStartPosition.CenterScreen;
+        Shown += (_, _) =>
+        {
+            var area = Screen.FromControl(this).WorkingArea;
+            if (Height > area.Height - 16)
+            {
+                MinimumSize = new Size(Math.Min(MinimumSize.Width, area.Width - 16), 400);
+                Height = Math.Max(400, area.Height - 16);
+                Top = area.Top + 8;
+            }
+        };
         modifiers = settings?.HotkeyModifiers ?? 3; hotkey = settings?.HotkeyKey ?? Keys.F11;
         startup.Checked = StartupService.Enabled;
         autoUpdate.Checked = settings?.AutoCheckUpdates ?? true;
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, Padding = new Padding(28), AutoScroll = true };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        foreach (int height in new[] { 124, 64, 176, 168, 84, 68 }) root.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
+        foreach (int height in new[] { 108, 48, 156, 154, 72, 64 }) root.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         var hero = new RoundedPanel { Dock = DockStyle.Fill, SurfaceColor = Ink, Padding = new Padding(22), Margin = new Padding(0, 0, 0, 18) };
         hero.Controls.Add(new Label { Text = "你的声音，随手切换。   /   开发者 wuha-like-sleep", ForeColor = Color.FromArgb(194, 204, 225), BackColor = Ink, Location = new Point(86, 62), AutoSize = true });
         hero.Controls.Add(new Label { Text = "AudioSwitch", ForeColor = Color.White, BackColor = Ink, Font = new Font("Segoe UI", 24, FontStyle.Bold), Location = new Point(82, 14), AutoSize = true });
@@ -48,7 +58,7 @@ internal sealed class SettingsForm : Form
         var optionSurface = new RoundedPanel { Dock = DockStyle.Fill, Padding = new Padding(20), Margin = new Padding(0, 16, 0, 0) };
         var options = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = Padding.Empty, ColumnCount = 2, RowCount = 3, Margin = Padding.Empty };
         options.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45)); options.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
-        options.RowStyles.Add(new RowStyle(SizeType.Absolute, 35)); options.RowStyles.Add(new RowStyle(SizeType.Absolute, 44)); options.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        options.RowStyles.Add(new RowStyle(SizeType.Absolute, 28)); options.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); options.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         options.Controls.Add(new Label { Text = "02   按你的习惯设置", AutoSize = true, Font = new Font(Font, FontStyle.Bold) }, 0, 0); options.SetColumnSpan(options.GetControlFromPosition(0, 0)!, 2);
         options.Controls.Add(new Label { Text = "切换快捷键", AutoSize = true, Padding = new Padding(0, 6, 0, 0) }, 0, 1);
         var capture = new TextBox { ReadOnly = true, Dock = DockStyle.Top, BackColor = Color.FromArgb(240, 244, 255), ForeColor = Accent, BorderStyle = BorderStyle.FixedSingle, Text = HotkeyWindow.Describe(modifiers, hotkey), AccessibleName = "点击后按下新快捷键" };
