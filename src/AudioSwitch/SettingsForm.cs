@@ -6,7 +6,8 @@ internal sealed class SettingsForm : ChromeForm
     private static readonly Color Muted = Theme.Muted;
     private static readonly Color Accent = Theme.Accent;
     private List<OutputDevice> selectedDevices = [];
-    private readonly Label deviceSummary = new() { Dock = DockStyle.Fill, ForeColor = Theme.Ink, AutoEllipsis = true };
+    private readonly DeviceSummaryPanel deviceSummary = new();
+    private readonly Label cycleHeading = new() { Dock = DockStyle.Fill, ForeColor = Theme.Accent };
     private readonly ComboBox toastMonitor = DevicePicker();
     private readonly Toggle startup = new() { Text = "登录 Windows 后自动启动" };
     private readonly Toggle autoUpdate = new() { Text = "启动时检查新版本" };
@@ -119,7 +120,8 @@ internal sealed class SettingsForm : ChromeForm
         var deviceBody = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, BackColor = Color.White };
         deviceBody.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); deviceBody.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
         deviceBody.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); deviceBody.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        deviceBody.Controls.Add(new Label { Text = "快捷键循环列表", Font = new Font(Font, FontStyle.Bold), ForeColor = Accent, Dock = DockStyle.Fill }, 0, 0);
+        cycleHeading.Font = new Font(Font, FontStyle.Bold);
+        deviceBody.Controls.Add(cycleHeading, 0, 0);
         deviceBody.Controls.Add(deviceSummary, 0, 1);
         var manageDevices = new ThemeButton { Text = "管理设备", Dock = DockStyle.Top, Height = 42 };
         manageDevices.Click += (_, _) =>
@@ -272,9 +274,8 @@ internal sealed class SettingsForm : ChromeForm
     }
     private void UpdateDeviceSummary()
     {
-        deviceSummary.Text = selectedDevices.Count == 0 ? "尚未选择设备，点击管理设备开始。\n支持 USB、蓝牙、HDMI 等 Windows 音频输出。"
-            : string.Join("\n", selectedDevices.Take(3).Select((d, i) => $"{i + 1}. {d.Name} · {(knownDevices.Any(k => k.Id == d.Id) ? "已连接" : "未连接")}"))
-                + (selectedDevices.Count > 3 ? $"\n另有 {selectedDevices.Count - 3} 台设备" : "");
+        cycleHeading.Text = $"循环列表 · {selectedDevices.Count} 台设备";
+        deviceSummary.UpdateSummary(selectedDevices, knownDevices);
     }
     private sealed record Choice(string Id, string Label) { public override string ToString() => Label; }
 }

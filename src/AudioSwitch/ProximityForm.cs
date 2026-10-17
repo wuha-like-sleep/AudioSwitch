@@ -11,6 +11,10 @@ internal sealed class ProximityForm : ChromeForm
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 1000 };
     private readonly Func<List<PhoneSnapshot>> read;
     private readonly Func<string?> error;
+    private readonly ProximityGuard testGuard = new();
+    private bool testing, testWouldLock;
+    internal bool IsTesting => testing;
+    internal string StatusText => status.Text;
     public ProximitySettings? Selection { get; private set; }
     public ProximityForm(ProximitySettings? settings, Func<List<PhoneSnapshot>> read, Func<string?> error)
     {
@@ -39,37 +43,54 @@ internal sealed class ProximityForm : ChromeForm
         mode.SelectedIndexChanged += (_, _) => threshold.Enabled = (mode.SelectedItem as Choice)?.Id != "disconnect";
         threshold.Enabled = settings.Mode != "disconnect";
         card.Controls.Add(fields); root.Controls.Add(card, 0, 2); root.Controls.Add(status, 0, 3);
-        root.Controls.Add(new Label { Text = "信号模式只在 Windows 提供实时负值信号时可用，不代表精确米数。\n读取不到、信号过期或监测异常时暂停信号锁屏；手机回到附近会取消倒计时。\n首次需先检测到手机可用，重启或解锁后重新确认，避免启动即误锁。", ForeColor = Theme.Muted, Dock = DockStyle.Fill }, 0, 4);
+        root.Controls.Add(new Label { Text = "信号模式只在 Windows 提供实时负值信号时可用，不代表精确米数。\n读取不到、信号过期或监测异常时暂停信号锁屏；手机回到附近会取消倒计时。\n首次需先检测到手机可用，重启或解锁后重新确认。\n完成后请回到设置页保存并关闭窗口，正式监测才会开始。", ForeColor = Theme.Muted, Dock = DockStyle.Fill }, 0, 4);
         var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false };
         var done = Button("完成", true); done.Click += (_, _) =>
         {
             string id = (phone.SelectedItem as Choice)?.Id ?? "";
             if (enabled.Checked && id.Length == 0) { AppDialog.Show(this, "请先配对并选择手机。", "尚未选择手机"); return; }
-            Selection = new(enabled.Checked, id, (mode.SelectedItem as Choice)!.Id, int.Parse(((Choice)delay.SelectedItem!).Id), int.Parse(((Choice)threshold.SelectedItem!).Id));
+            Selection = CurrentSettings();
             DialogResult = DialogResult.OK;
         };
         var cancel = Button("取消", false); cancel.DialogResult = DialogResult.Cancel;
+        var test = Button("测试判定", false);
+        test.Click += (_, _) =>
+        {
+            testing = !testing; testWouldLock = false; testGuard.Reset();
+            test.Text = testing ? "停止测试" : "测试判定";
+            RefreshStatus();
+        };
+        foreach (var picker in new[] { phone, mode, delay, threshold }) picker.SelectedIndexChanged += (_, _) => { testGuard.Reset(); testWouldLock = false; };
         var refresh = Button("刷新手机", false); refresh.Click += (_, _) => FillPhones((phone.SelectedItem as Choice)?.Id ?? "");
-        footer.Controls.AddRange([done, cancel, refresh]); root.Controls.Add(footer, 0, 5);
+        footer.Controls.AddRange([done, cancel, refresh, test]); root.Controls.Add(footer, 0, 5);
         Controls.Add(root); root.BringToFront(); AcceptButton = done; CancelButton = cancel;
         timer.Tick += (_, _) => RefreshStatus(); timer.Start(); RefreshStatus();
         Shown += (_, _) => done.Focus();
     }
+    private ProximitySettings CurrentSettings() => new(enabled.Checked, (phone.SelectedItem as Choice)?.Id ?? "", ((Choice)mode.SelectedItem!).Id, int.Parse(((Choice)delay.SelectedItem!).Id), int.Parse(((Choice)threshold.SelectedItem!).Id));
     private void FillPhones(string preferred)
     {
         phone.Items.Clear();
-        foreach (var item in read()) phone.Items.Add(new Choice(item.Id, item.Name + (item.Connected == true ? " · 已连接" : " · 未连接")));
+        foreach (var item in read()) phone.Items.Add(new Choice(item.Id, item.Name));
         var match = phone.Items.Cast<Choice>().FirstOrDefault(c => c.Id == preferred);
         if (match == null && preferred.Length > 0) { match = new Choice(preferred, "已保存的手机 · 暂未识别"); phone.Items.Add(match); }
         phone.SelectedItem = match;
     }
     private void RefreshStatus()
     {
-        if (error() is { } problem) { status.Text = problem; return; }
+        if (error() is { } problem) { testGuard.Reset(); testWouldLock = false; status.Text = problem; return; }
         var selected = read().FirstOrDefault(p => p.Id == (phone.SelectedItem as Choice)?.Id);
         bool fresh = selected?.SignalAt is { } seen && DateTimeOffset.UtcNow - seen <= TimeSpan.FromSeconds(20);
         status.Text = selected == null ? "等待选择手机。若列表为空，请先配对手机，再点击刷新。" :
-            $"连接：{(selected.Connected == true ? "已连接" : selected.Connected == false ? "已断开" : "未知")}\n实时信号：{(fresh ? selected.Signal!.Value.ToString() : "暂不支持或未收到实时信号")}";
+            $"连接：{(selected.Connected == true ? "已连接" : selected.Connected == false ? "已断开" : "未知")} · 实时信号：{(fresh ? selected.Signal!.Value.ToString() : "暂无可用值")}";
+        if (testing)
+        {
+            var result = testGuard.Evaluate(CurrentSettings() with { Enabled = true }, selected, DateTimeOffset.UtcNow);
+            testWouldLock |= result.ShouldLock;
+            if (result.Healthy || selected == null) testWouldLock = false;
+            status.Text += "\n测试（不会锁屏）：" + (testWouldLock ? "本次达到锁屏条件，测试没有执行锁屏。" : result.Message);
+        }
+        else status.Text += "\n可点击测试判定观察倒计时，测试不会锁定电脑。";
     }
     private static void AddField(TableLayoutPanel fields, string name, Control control, int row)
     {

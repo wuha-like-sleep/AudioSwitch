@@ -175,6 +175,16 @@ internal static class SettingsStore
             chooser.Close();
         }
         VerifyProximity();
+        using (var testForm = new ProximityForm(new(false, "test-phone"), () => [new("test-phone", "Phone", true, -60, DateTimeOffset.UtcNow)], () => null))
+        {
+            testForm.Show();
+            var testButton = Descendants(testForm).OfType<ThemeButton>().First(c => c.Text == "测试判定");
+            testButton.PerformClick();
+            if (!testForm.IsTesting || !testForm.StatusText.Contains("不会锁屏")) throw new InvalidOperationException("Non-locking proximity test mode failed.");
+            testButton.PerformClick();
+            if (testForm.IsTesting) throw new InvalidOperationException("Proximity test could not be stopped.");
+            testForm.Close();
+        }
         using (var presence = new BluetoothPresence())
         {
             presence.Start(); Application.DoEvents(); _ = presence.Snapshot();

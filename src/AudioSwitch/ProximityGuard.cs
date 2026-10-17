@@ -2,7 +2,7 @@ namespace AudioSwitch;
 
 internal sealed record ProximitySettings(bool Enabled = false, string PhoneId = "", string Mode = "disconnect", int DelaySeconds = 30, int SignalThreshold = -75);
 internal sealed record PhoneSnapshot(string Id, string Name, bool? Connected, int? Signal, DateTimeOffset? SignalAt);
-internal sealed record ProximityState(string Message, bool ShouldLock = false, int? Remaining = null);
+internal sealed record ProximityState(string Message, bool ShouldLock = false, int? Remaining = null, bool Healthy = false);
 
 internal sealed class ProximityGuard
 {
@@ -18,7 +18,7 @@ internal sealed class ProximityGuard
         if (signalMode && !fresh) { awaySince = null; return new("没有实时信号，暂停信号锁屏"); }
         bool healthy = signalMode ? fresh && phone.Signal > settings.SignalThreshold + 5 : phone.Connected == true;
         if (healthy && (!combined || !fresh || phone.Signal > settings.SignalThreshold + 5))
-        { armed = true; awaySince = null; return new("手机在附近，监测中"); }
+        { armed = true; awaySince = null; return new("手机在附近，监测中", Healthy: true); }
         if (!armed) return new("等待手机连接或靠近，尚未启用锁屏判定");
         bool away = (settings.Mode != "signal" && phone.Connected == false) || ((signalMode || combined) && fresh && phone.Signal <= settings.SignalThreshold);
         if (!away) { awaySince = null; return new("信号处于缓冲区域，继续监测"); }
