@@ -11,6 +11,14 @@ internal static class Program
         using var mutex = new Mutex(true, "Local\\AudioSwitch.Tray", out bool first);
         if (!first) { if (!args.Contains("--startup")) MessageBox.Show("音频切换已在运行，请查看系统托盘。", "音频切换"); return; }
         ApplicationConfiguration.Initialize();
+        if (args.Contains("--preview"))
+        {
+            using var preview = new SettingsForm(
+                [new("preview-headphones", "USB 耳机 · Headphones"), new("preview-speakers", "USB 音箱 · Speakers")],
+                new Settings("preview-headphones", "preview-speakers"));
+            preview.ShowDialog();
+            return;
+        }
         using var context = new TrayContext(args.Contains("--startup"));
         Application.Run(context);
     }

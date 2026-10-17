@@ -9,6 +9,39 @@ $app = Join-Path $install 'AudioSwitch.exe'
 if (-not (Test-Path $app)) { throw 'Installed application missing' }
 $value = (Get-ItemProperty $run).AudioSwitch
 if ($value -ne "`"$app`" --startup") { throw "Incorrect startup command: $value" }
+# Render the actual settings window with sample devices, independent of CI audio hardware.
+$preview = Start-Process $app -ArgumentList '--preview' -PassThru
+try {
+    for ($attempt = 0; $attempt -lt 20; $attempt++) {
+        Start-Sleep -Milliseconds 500
+        $preview.Refresh()
+        if ($preview.MainWindowHandle -ne 0) { break }
+        if ($preview.HasExited) { throw 'Settings preview exited unexpectedly' }
+    }
+    if ($preview.MainWindowHandle -eq 0) { throw 'Settings preview window did not open' }
+    Add-Type -AssemblyName System.Drawing
+    Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public class WindowCapture {
+    [StructLayout(LayoutKind.Sequential)] public struct RECT { public int Left, Top, Right, Bottom; }
+    [DllImport("user32.dll")] public static extern bool GetWindowRect(IntPtr h, out RECT r);
+    [DllImport("user32.dll")] public static extern bool PrintWindow(IntPtr h, IntPtr dc, uint flags);
+}
+'@
+    $rect = New-Object WindowCapture+RECT
+    [void][WindowCapture]::GetWindowRect($preview.MainWindowHandle, [ref]$rect)
+    $bitmap = New-Object System.Drawing.Bitmap(($rect.Right - $rect.Left), ($rect.Bottom - $rect.Top))
+    $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+    $dc = $graphics.GetHdc()
+    try { $captured = [WindowCapture]::PrintWindow($preview.MainWindowHandle, $dc, 2) }
+    finally { $graphics.ReleaseHdc($dc) }
+    if (-not $captured) { throw 'Settings screenshot capture failed' }
+    $bitmap.Save((Join-Path $PSScriptRoot '../artifacts/settings-preview.png'))
+    $graphics.Dispose(); $bitmap.Dispose()
+} finally {
+    if (-not $preview.HasExited) { Stop-Process -Id $preview.Id; $preview.WaitForExit() }
+}
 $appProcess = Start-Process $app -ArgumentList '--startup' -PassThru
 try {
     Start-Sleep -Seconds 5
