@@ -179,7 +179,7 @@ internal static class SettingsStore
         {
             presence.Start(); Application.DoEvents(); _ = presence.Snapshot();
             // A runner may have no Bluetooth adapter. An API loading failure must still fail verification.
-            if (presence.Error?.Contains("Could not load", StringComparison.OrdinalIgnoreCase) == true) throw new InvalidOperationException(presence.Error);
+            if (presence.Failure is ArgumentException or TypeLoadException or FileNotFoundException) throw new InvalidOperationException("Bluetooth API initialization failed.", presence.Failure);
         }
         File.Delete(path);
     }

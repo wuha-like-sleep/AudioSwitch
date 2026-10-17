@@ -9,6 +9,7 @@ internal sealed class BluetoothPresence : IDisposable
     private readonly Dictionary<string, PhoneSnapshot> phones = new();
     private DeviceWatcher? watcher;
     public string? Error { get; private set; }
+    internal Exception? Failure { get; private set; }
     public List<PhoneSnapshot> Snapshot() { lock (gate) return phones.Values.OrderBy(p => p.Name).ToList(); }
     public void Start()
     {
@@ -20,7 +21,7 @@ internal sealed class BluetoothPresence : IDisposable
             watcher.Added += Added; watcher.Updated += Updated; watcher.Removed += Removed;
             watcher.Stopped += Stopped; watcher.Start();
         }
-        catch (Exception ex) { Error = "蓝牙监测不可用：" + ex.Message; }
+        catch (Exception ex) { Failure = ex; Error = "蓝牙监测不可用：" + ex.Message; }
     }
     private void Added(DeviceWatcher sender, DeviceInformation info)
     {

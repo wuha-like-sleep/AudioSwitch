@@ -127,6 +127,7 @@ internal sealed class SettingsForm : ChromeForm
             using var form = new DeviceSelectionForm(knownDevices, selectedDevices);
             if (form.ShowDialog(this) == DialogResult.OK) { selectedDevices = form.Selection; UpdateDeviceSummary(); }
         };
+        Shown += (_, _) => { if (selectedDevices.Count == 0) manageDevices.Focus(); else switchNow.Focus(); };
         deviceBody.Controls.Add(manageDevices, 1, 1); deviceCard.Controls.Add(deviceBody); root.Controls.Add(deviceCard, 0, 2);
         var optionSurface = new RoundedPanel { Dock = DockStyle.Fill, Padding = new Padding(20), Margin = new Padding(0, 16, 0, 0) };
         var options = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = Padding.Empty, ColumnCount = 2, RowCount = 4, Margin = Padding.Empty };
