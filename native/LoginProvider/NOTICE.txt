@@ -1,4 +1,4 @@
-AudioSwitch 登录实验组件 · 0.3.9 Preview 1
+AudioSwitch 登录实验组件 · 0.3.10 Preview 1
 开发者：wuha-like-sleep
 
 这是可选的 Windows 原生 Credential Provider 自动提交实验组件，默认关闭，真实 iPhone 自动解锁尚未验证。

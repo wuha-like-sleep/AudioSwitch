@@ -24,6 +24,8 @@ try {
     # Reinstall exercises stopping/replacing/restarting an existing service.
     $upgrade = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
     if ($upgrade.ExitCode -ne 0) { throw "Lab upgrade exit $($upgrade.ExitCode)" }
+    $expectedVersion = ([xml](Get-Content (Join-Path $PSScriptRoot '../src/AudioSwitch/AudioSwitch.csproj') -Raw)).Project.PropertyGroup.InformationalVersion
+    if ([Diagnostics.FileVersionInfo]::GetVersionInfo((Join-Path $install 'AudioSwitch.LoginBridge.exe')).ProductVersion -ne $expectedVersion) { throw 'Installed helper product version does not match the app' }
     $service = Get-Service -Name 'AudioSwitchLoginBridge'
     if ($service.Status -ne 'Running') { throw 'Login bridge did not start' }
     $registered = (Get-Item "$classes\InprocServer32").GetValue('')
@@ -45,8 +47,16 @@ try {
         Set-ItemProperty $binding -Name Automatic -Value 1
         & $test $registered '--deny-bound'
         if ($LASTEXITCODE -ne 0) { throw 'Broker allowed a non-LogonUI caller' }
-        & (Join-Path $install 'AudioSwitch.LoginBridge.exe') '--probe-service' 'S-1-5-21-100-200-300-1001'
-        if ($LASTEXITCODE -eq 0) { throw 'Desktop service probe accepted a different session user SID' }
+        $probeStart = [Diagnostics.ProcessStartInfo]::new((Join-Path $install 'AudioSwitch.LoginBridge.exe'))
+        $probeStart.UseShellExecute = $true
+        $probeStart.Verb = 'runas'
+        $probeStart.WindowStyle = 'Hidden'
+        $probeStart.ArgumentList.Add('--probe-service')
+        $probeStart.ArgumentList.Add('S-1-5-21-100-200-300-1001')
+        $probeProcess = [Diagnostics.Process]::Start($probeStart)
+        $probeProcess.WaitForExit()
+        if ($probeProcess.ExitCode -ne 5) { throw "Desktop service probe did not reach the SID gate: $($probeProcess.ExitCode)" }
+        $probeProcess.Dispose()
         if ((Get-ItemProperty $binding).Automatic -ne 1) { throw 'Service probe changed automatic enrollment' }
         Stop-Service 'AudioSwitchLoginBridge'
         & $test $registered '--deny-bound'

@@ -165,3 +165,7 @@ CI 检查虚构记录的 DPAPI 往返、密文不含测试密码、受限令牌�
 依据：[Bluetooth connect](https://learn.microsoft.com/en-us/windows/win32/bluetooth/bluetooth-and-connect)、[WSAEventSelect](https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-wsaeventselect)。此版用于定位用户态成功、系统服务失败的差异，不宣称已修复真机解锁。
 
 0.3.9 Preview 1 发行代码：`ba73bc4c3f0f43dfae912d1f7e00aadda5736ec1`。[Windows CI 39030502631](https://github.com/wuha-like-sleep/AudioSwitch/actions/runs/39030502631) 三架构构建，x64 安装、服务、受保护存储、协议、跨 SID 检测拒绝与错误解释检查通过。CI 没有真实 iPhone，系统服务连接失败原因仍待用户新诊断确认。
+
+### 0.3.10：登录组件版本匹配提示
+
+针对“检测系统服务提示参数错误、没有新诊断”的反馈，在运行检测、初始化及新绑定前检查磁盘辅助程序 ProductVersion 与主程序版本一致，避免旧辅助程序不认识新命令时只显示通用错误。状态页列出主程序与磁盘组件版本；检测错误显示退出码，87 明确说明请求可能尚未进入服务。安装向导退出后再次核对磁盘组件版本，不匹配时提示重启 / 重试，不宣称升级成功。停用和解绑仍可使用已有辅助程序，不因版本检查阻碍撤销。磁盘版本不代表已经加载到 LogonUI 的 DLL 版本；仍需按安装提示重启。此改动没有确认或修复底层蓝牙连接故障，等待同版本组件真机结果。

@@ -25,7 +25,7 @@ internal sealed class LoginComponentForm : ChromeForm
         var userSid = WindowsIdentity.GetCurrent().User?.Value ?? "";
         void RefreshReport()
         {
-            string registration, binding, automatic, diagnostics = "";
+            string registration, binding, automatic, componentVersion = "未知", diagnostics = "";
             try
             {
                 using var registry = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, Environment.Is64BitOperatingSystem ? RegistryView.Registry64 : RegistryView.Registry32);
@@ -49,12 +49,13 @@ internal sealed class LoginComponentForm : ChromeForm
                     };
                     diagnostics += $"{time} · {state} [错误 {error} / 0x{error:X8}；{(stage is "Phone" or "ServiceProbe" ? "蓝牙阶段" : "子状态")} 0x{substatus:X8}]\r\n";
                 }
+                componentVersion = LoginComponentInstaller.InstalledVersion;
                 registration = key == null ? "未注册实验组件" : "已注册实验组件";
                 automatic = bound?.GetValue("Automatic") is int value && value == 1 ? "自动提交已配置（不代表已成功解锁）" : "自动提交未配置或已停用";
                 binding = bound == null ? "当前账户未绑定：保留手动密码实验模式" : "当前账户已绑定：提交前必须通过手机验证";
             }
             catch { registration = "无法读取注册状态"; binding = "无法读取绑定状态"; automatic = "自动状态未知"; }
-            report.Text = $"系统架构：{NativeRuntime} · {registration}\r\n{binding}\r\n{automatic}\r\n\r\n最近诊断（按阶段显示，时间用于核对是否同一次测试）：\r\n{(diagnostics.Length == 0 ? "尚无记录；不代表测试成功。\r\n" : diagnostics)}\r\n" +
+            report.Text = $"系统架构：{NativeRuntime} · {registration}\r\n主程序：{UpdateService.CurrentTag}；磁盘组件：{componentVersion}\r\n{binding}\r\n{automatic}\r\n\r\n最近诊断（按阶段显示，时间用于核对是否同一次测试）：\r\n{(diagnostics.Length == 0 ? "尚无记录；不代表测试成功。\r\n" : diagnostics)}\r\n" +
                 "登录桥接服务使用已配对手机的经典蓝牙地址，现场建立要求认证和加密的免提服务连接。登录组件仅接受来自该系统服务、对应本次请求和会话的短时结果。服务或手机不可用时停止提交并清除密码。\r\n\r\n" +
                 "自动提交只用于同一用户已登录后锁定的会话。初始化需在本机 Windows 凭据窗口输入微软账户邮箱和账户密码，经服务验证 SID 后，使用机器 DPAPI 加密并限制为 SYSTEM / 管理员访问。管理员仍有能力访问凭据，不保存 PIN。\r\n\r\n" +
                 "默认关闭：先绑定手机，再点击“初始化并启用”。无可用账户密码时不能初始化；不支持无密码微软账户、组织账户或本地账户。Hello / PIN 继续使用系统原有入口。\r\n\r\n" +
@@ -76,6 +77,7 @@ internal sealed class LoginComponentForm : ChromeForm
                 var programFiles = Environment.GetEnvironmentVariable("ProgramW6432") ?? Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
                 var helper = Path.Combine(programFiles, "AudioSwitch Login Lab", "AudioSwitch.LoginBridge.exe");
                 if (!File.Exists(helper)) throw new InvalidOperationException("请先安装本版本的独立 LoginLab 实验组件，再进行绑定。");
+                if (!remove) LoginComponentInstaller.RequireCurrentVersion();
                 string address = "";
                 if (!remove)
                 {
@@ -112,6 +114,7 @@ internal sealed class LoginComponentForm : ChromeForm
                 var programFiles = Environment.GetEnvironmentVariable("ProgramW6432") ?? Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
                 var helper = Path.Combine(programFiles, "AudioSwitch Login Lab", "AudioSwitch.LoginBridge.exe");
                 if (!File.Exists(helper)) throw new InvalidOperationException("请先安装本版本 LoginLab 实验组件。");
+                if (!clear) LoginComponentInstaller.RequireCurrentVersion();
                 if (!AppDialog.ConfirmAction(this, clear ? "停用自动提交" : "初始化本机凭据", clear ? "将停用自动提交并删除本机加密凭据，保留手机绑定和系统 Hello / PIN。" : "将通过 Windows 本机窗口收集微软账户邮箱和账户密码（不是 PIN），由系统服务验证并加密保存。管理员可访问。自动解锁尚未经真机验证；请在有恢复手段的测试电脑上启用。", clear ? "停用并清除" : "继续初始化")) return;
                 var start = new ProcessStartInfo(helper) { UseShellExecute = true, Verb = "runas", WindowStyle = ProcessWindowStyle.Hidden };
                 start.ArgumentList.Add(clear ? "--revoke" : "--enroll"); start.ArgumentList.Add(userSid);
@@ -146,6 +149,7 @@ internal sealed class LoginComponentForm : ChromeForm
                 var programFiles = Environment.GetEnvironmentVariable("ProgramW6432") ?? Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
                 var helper = Path.Combine(programFiles, "AudioSwitch Login Lab", "AudioSwitch.LoginBridge.exe");
                 if (!File.Exists(helper)) throw new InvalidOperationException("请先点击“下载并安装组件”，安装同版本 LoginLab。");
+                LoginComponentInstaller.RequireCurrentVersion();
                 var start = new ProcessStartInfo(helper) { UseShellExecute = true, Verb = "runas", WindowStyle = ProcessWindowStyle.Hidden };
                 start.ArgumentList.Add("--probe-service"); start.ArgumentList.Add(userSid);
                 using var process = Process.Start(start) ?? throw new InvalidOperationException("无法启动检测工具。");
@@ -154,7 +158,7 @@ internal sealed class LoginComponentForm : ChromeForm
                 if (process.ExitCode != 0) throw new System.ComponentModel.Win32Exception(process.ExitCode);
                 AppDialog.Show(this, "系统服务已建立要求认证和加密的蓝牙连接。未保存密码、未启用自动提交、未解锁。请复制诊断核对本次结果。", "服务链路检测通过");
             }
-            catch (Exception ex) { if (!IsDisposed) { RefreshReport(); AppDialog.Show(this, ex.Message + "\n\n请复制诊断中的“系统服务检测”或蓝牙阶段记录。若没有新记录，请重新安装同版本组件并按要求重启。", "服务链路检测未完成"); } }
+            catch (Exception ex) { if (!IsDisposed) { RefreshReport(); var detail = ex is System.ComponentModel.Win32Exception native ? $"退出码 {native.NativeErrorCode} / 0x{native.NativeErrorCode:X8}：{ex.Message}" : ex.Message; if (ex is System.ComponentModel.Win32Exception invalid && invalid.NativeErrorCode == 87) detail += "\n检测工具拒绝了命令参数。请求可能尚未进入桥接服务，不能据此判断手机认证失败。请核对组件版本。"; AppDialog.Show(this, detail + "\n\n请复制诊断中的“系统服务检测”或蓝牙阶段记录。若没有新记录，请重新安装同版本组件并按要求重启。", "服务链路检测未完成"); } }
             finally { if (!IsDisposed) { probe.Text = "检测系统服务"; probe.Enabled = download.Enabled = unbind.Enabled = initialize.Enabled = revoke.Enabled = true; bind.Enabled = phoneId.Length > 0; } }
         };
         var options = Button("系统登录选项", false); options.Click += (_, _) => Open("ms-settings:signinoptions");

@@ -172,6 +172,10 @@ internal static class SettingsStore
         }
         if (!LoginComponentForm.PhoneFailure(10060, 8).Contains("超时") || !LoginComponentForm.PhoneFailure(10013, 4).Contains("认证"))
             throw new InvalidOperationException("Native service phone error explanation failed.");
+        if (!LoginComponentInstaller.VersionMatches("0.3.10-preview.1", "0.3.10-preview.1")
+            || LoginComponentInstaller.VersionMatches("0.3.8-preview.1", "0.3.10-preview.1")
+            || LoginComponentInstaller.VersionMatches("未知", "0.3.10-preview.1"))
+            throw new InvalidOperationException("Login component version mismatch was accepted.");
         string diagnostic = Diagnostics.Build(second, true);
         if (!diagnostic.Contains(UpdateService.CurrentTag) || diagnostic.Contains(second.Headphones) || diagnostic.Contains(second.Speakers))
             throw new InvalidOperationException("Diagnostics version or device identifier privacy failed.");
