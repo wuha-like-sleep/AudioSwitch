@@ -170,7 +170,7 @@ internal static class SettingsStore
             throw new InvalidOperationException("Multi-device cycle order or offline skipping failed.");
         using (var chooser = new DeviceSelectionForm(many.Devices!, many.Devices!))
         {
-            chooser.Show(); chooser.MoveDevice("c", -1);
+            chooser.Show(); VerifyButtonBounds(chooser); chooser.MoveDevice("c", -1);
             if (!chooser.Selection.Select(d => d.Id).SequenceEqual(["a", "c", "b"])) throw new InvalidOperationException("Visual device reordering failed.");
             chooser.SearchQuery = "HDMI";
             if (!chooser.VisibleIds.SequenceEqual(["c"])) throw new InvalidOperationException("Device search failed.");
@@ -193,7 +193,7 @@ internal static class SettingsStore
         VerifyProximity();
         using (var testForm = new ProximityForm(new(false, "test-phone"), () => [new("test-phone", "Phone", true, -60, DateTimeOffset.UtcNow)], () => null))
         {
-            testForm.Show();
+            testForm.Show(); VerifyButtonBounds(testForm);
             var testButton = Descendants(testForm).OfType<ThemeButton>().First(c => c.Text == "测试判定");
             testButton.PerformClick();
             if (!testForm.IsTesting || !testForm.StatusText.Contains("不会锁屏")) throw new InvalidOperationException("Non-locking proximity test mode failed.");
@@ -209,6 +209,14 @@ internal static class SettingsStore
         }
         File.Delete(path);
     }
+    private static void VerifyButtonBounds(Control root)
+    {
+        Application.DoEvents();
+        foreach (var button in Descendants(root).OfType<ThemeButton>())
+            if (button.Visible && button.Parent is { } parent && !parent.ClientRectangle.Contains(button.Bounds))
+                throw new InvalidOperationException($"Button layout exceeds its container: {button.Text} ({button.Bounds}, {parent.ClientRectangle}).");
+    }
+
     private static void VerifyProximity()
     {
         var guard = new ProximityGuard(); var config = new ProximitySettings(true, "phone", "disconnect", 15);

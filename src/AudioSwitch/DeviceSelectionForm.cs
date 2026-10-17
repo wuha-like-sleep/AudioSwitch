@@ -24,7 +24,8 @@ internal sealed class DeviceSelectionForm : ChromeForm
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); root.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
         root.Controls.Add(new Label { Text = "你的设备，你的切换顺序", Dock = DockStyle.Fill, Font = new Font(Font.FontFamily, 18, FontStyle.Bold) }, 0, 0);
         root.Controls.Add(new Label { Text = "勾选参加循环切换的设备，用上下按钮调整顺序。\n支持 Windows 可用的 USB、蓝牙、HDMI 和其他音频输出。", Dock = DockStyle.Fill, ForeColor = Theme.Muted }, 0, 1);
-        var tools = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, Margin = Padding.Empty, Padding = new Padding(0, 4, 0, 8) };
+        var tools = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = Padding.Empty, Padding = new Padding(0, 4, 0, 8) };
+        tools.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         tools.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); tools.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108)); tools.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108));
         var add = new ThemeButton { Text = "加入在线", Dock = DockStyle.Fill, Margin = new Padding(8, 0, 0, 0) };
         var remove = new ThemeButton { Text = "移出列表", Dock = DockStyle.Fill, Margin = new Padding(8, 0, 0, 0) };

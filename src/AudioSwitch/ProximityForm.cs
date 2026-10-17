@@ -36,7 +36,8 @@ internal sealed class ProximityForm : ChromeForm
         fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140)); fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         fields.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); for (int i = 0; i < 5; i++) fields.RowStyles.Add(new RowStyle(SizeType.Absolute, 42));
         enabled.Checked = settings.Enabled; fields.Controls.Add(enabled, 0, 0); fields.SetColumnSpan(enabled, 2);
-        AddField(fields, "配对的手机", phone, 1); AddField(fields, "触发方式", mode, 2); AddField(fields, "持续离开时间", delay, 3); var signalRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Margin = Padding.Empty };
+        AddField(fields, "配对的手机", phone, 1); AddField(fields, "触发方式", mode, 2); AddField(fields, "持续离开时间", delay, 3); var signalRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 1, Margin = Padding.Empty };
+        signalRow.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         signalRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); signalRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 100));
         var calibrate = new ThemeButton { Text = "参考标定", Dock = DockStyle.Fill, Margin = new Padding(8, 0, 0, 0) };
         calibrate.Click += (_, _) =>
