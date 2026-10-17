@@ -90,7 +90,7 @@ bool IsLogonClient(HANDLE pipe, const Bridge::Request& request) {
     } else { GetSystemDirectoryW(expected, _countof(expected)); wcscat_s(expected, L"\\LogonUI.exe"); }
     HANDLE token = nullptr;
     bool valid = imageRead && _wcsicmp(image, expected) == 0 && OpenProcessToken(process, TOKEN_QUERY, &token);
-    BYTE storage[512]{}; DWORD bytes = 0;
+    alignas(TOKEN_USER) BYTE storage[512]{}; DWORD bytes = 0;
     if (enrollment) {
         TOKEN_ELEVATION elevation{};
         valid = valid && GetTokenInformation(token, TokenElevation, &elevation, sizeof(elevation), &bytes) && elevation.TokenIsElevated;
@@ -113,7 +113,7 @@ DWORD SaveEnrollment(const Bridge::Request& request, const BYTE* encrypted) {
     uint64_t phone = 0; if (!Bridge::ReadBinding(record.sid, &phone) || phone != record.phone) return ERROR_NOT_FOUND;
     HANDLE user = nullptr;
     if (!LogonUserW(record.qualified + 17, L"MicrosoftAccount", record.password, LOGON32_LOGON_INTERACTIVE, LOGON32_PROVIDER_WINNT50, &user)) return GetLastError();
-    BYTE tokenData[512]{}; DWORD size = 0; PSID expected = nullptr;
+    alignas(TOKEN_USER) BYTE tokenData[512]{}; DWORD size = 0; PSID expected = nullptr;
     const bool matched = ConvertStringSidToSidW(record.sid, &expected) && GetTokenInformation(user, TokenUser, tokenData, sizeof(tokenData), &size) && EqualSid(expected, reinterpret_cast<TOKEN_USER*>(tokenData)->User.Sid);
     if (expected) LocalFree(expected); CloseHandle(user);
     if (!matched) return ERROR_NO_SUCH_USER;

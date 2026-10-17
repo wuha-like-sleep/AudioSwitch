@@ -30,7 +30,7 @@ internal static class UnlockLinkProbe
                 await socket.ConnectAsync(service.ConnectionHostName, service.ConnectionServiceName, SocketProtectionLevel.BluetoothEncryptionWithAuthentication).AsTask(deadline.Token);
                 var protection = socket.Information.ProtectionLevel;
                 if (!IsAuthenticated(protection)) return new("未确认所需保护级别", $"实际保护级别：{protection}。不将普通或允许空认证的连接视为通过。");
-                return new("认证加密蓝牙通道已建立", "Windows 报告连接采用 BluetoothEncryptionWithAuthentication。连接随后已关闭，未发送通话命令。\n\n这只验证蓝牙链路，不等于 Windows 身份认证或成功解锁。独立 Credential Provider 实验版已具备手动密码提交，但仍需有效账户真机认证、手机身份协议、受保护服务和自动解锁验证。", true);
+                return new("认证加密蓝牙通道已建立", "Windows 报告连接采用 BluetoothEncryptionWithAuthentication。连接随后已关闭，未发送通话命令。\n\n这只验证蓝牙链路，不等于 Windows 身份认证或成功解锁。独立 Credential Provider 实验版已具备本机初始化、受保护存储和自动提交代码，默认关闭；仍需真实 iPhone、微软账户和锁定会话端到端验证。", true);
             }
             finally { foreach (var service in result.Services) service.Dispose(); }
         }

@@ -3,7 +3,7 @@ namespace AudioSwitch;
 internal sealed class UnlockProbeForm : ChromeForm
 {
     private readonly CancellationTokenSource lifetime = new();
-    private readonly Label summary = new() { Dock = DockStyle.Fill, ForeColor = Theme.Accent, Text = "待检测 · 当前未实现 Windows 自动解锁" };
+    private readonly Label summary = new() { Dock = DockStyle.Fill, ForeColor = Theme.Accent, Text = "待检测 · 此检测不会锁屏或解锁" };
     private readonly TextBox report = new() { Dock = DockStyle.Fill, Multiline = true, ReadOnly = true, BorderStyle = BorderStyle.None, ScrollBars = ScrollBars.Vertical, BackColor = Color.White, ForeColor = Theme.Ink };
     private bool running;
     internal string Report => report.Text;
