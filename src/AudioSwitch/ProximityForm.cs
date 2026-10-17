@@ -30,7 +30,7 @@ internal sealed class ProximityForm : ChromeForm
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         foreach (int height in new[] { 42, 48, 278, 94, 82, 60 }) root.RowStyles.Add(new RowStyle(SizeType.Absolute, height));
         root.Controls.Add(new Label { Text = "带着手机离开，电脑自动锁定", Font = new Font(Font.FontFamily, 18, FontStyle.Bold), Dock = DockStyle.Fill }, 0, 0);
-        root.Controls.Add(new Label { Text = "先在 Windows 中配对手机，再选择下面的监测方式。\n只会锁屏，不会自动解锁，也不会主动连接手机。", ForeColor = Theme.Muted, Dock = DockStyle.Fill }, 0, 1);
+        root.Controls.Add(new Label { Text = "先在 Windows 中配对手机，再选择下面的监测方式。\n离开监测只会锁屏；解锁检测需手动点击，不会解锁。", ForeColor = Theme.Muted, Dock = DockStyle.Fill }, 0, 1);
         var card = new RoundedPanel { Dock = DockStyle.Fill, Padding = new Padding(16), Margin = Padding.Empty };
         var fields = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 6, BackColor = Color.White };
         fields.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140)); fields.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));

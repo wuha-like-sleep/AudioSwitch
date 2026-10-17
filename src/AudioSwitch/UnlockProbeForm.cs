@@ -44,6 +44,7 @@ internal sealed class UnlockProbeForm : ChromeForm
         };
         footer.Controls.AddRange([close, start, copy]); root.Controls.Add(footer, 0, 4);
         Controls.Add(root); root.BringToFront(); AcceptButton = start; CancelButton = close;
+        Shown += (_, _) => { report.Select(0, 0); start.Focus(); };
         FormClosing += (_, _) => lifetime.Cancel();
     }
     private static ThemeButton Button(string text, bool primary) => new() { Text = text, Primary = primary, Size = new Size(120, 42), Margin = new Padding(10, 8, 0, 0) };
