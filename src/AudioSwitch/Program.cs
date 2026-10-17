@@ -8,6 +8,12 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args.Length == 2 && args[0] == "--verify-audio")
+        {
+            try { AudioDevices.VerifyInterfaces(); File.WriteAllText(args[1], "Audio interfaces verified."); }
+            catch (Exception ex) { File.WriteAllText(args[1], ex.ToString()); Environment.ExitCode = 1; }
+            return;
+        }
         using var mutex = new Mutex(true, "Local\\AudioSwitch.Tray", out bool first);
         if (!first) { if (!args.Contains("--startup")) MessageBox.Show("音频切换已在运行，请查看系统托盘。", "音频切换"); return; }
         ApplicationConfiguration.Initialize();
@@ -93,10 +99,12 @@ internal sealed class TrayContext : ApplicationContext
     {
         if (configuring) return;
         configuring = true;
+        string operation = "读取音频设备";
         try
         {
             using var form = new SettingsForm(AudioDevices.List(), settings);
             if (form.ShowDialog() != DialogResult.OK) return;
+            operation = "保存设置";
             var candidate = form.Selection!;
             uint oldModifiers = settings?.HotkeyModifiers ?? 3;
             Keys oldKey = settings?.HotkeyKey ?? Keys.F11;
@@ -122,7 +130,11 @@ internal sealed class TrayContext : ApplicationContext
             RefreshStatus();
             Notify("设置已保存。点击托盘图标或按 " + HotkeyWindow.Describe(candidate.HotkeyModifiers, candidate.HotkeyKey) + " 切换。");
         }
-        catch (Exception ex) { Notify("保存设置失败：" + ex.Message, true); }
+        catch (Exception ex)
+        {
+            string details = $"{operation}失败：{ex.Message}\r\n\r\n错误类型：{ex.GetType().Name}\r\n错误码：0x{ex.HResult:X8}\r\n\r\n按 Ctrl+C 可以复制此提示。";
+            MessageBox.Show(details, "AudioSwitch · " + operation + "失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+        }
         finally { configuring = false; }
     }
 

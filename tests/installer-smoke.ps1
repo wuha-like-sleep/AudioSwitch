@@ -9,6 +9,14 @@ $app = Join-Path $install 'AudioSwitch.exe'
 if (-not (Test-Path $app)) { throw 'Installed application missing' }
 $value = (Get-ItemProperty $run).AudioSwitch
 if ($value -ne "`"$app`" --startup") { throw "Incorrect startup command: $value" }
+# Exercise real Windows audio COM interfaces even when the runner has no physical output device.
+foreach ($service in @('AudioEndpointBuilder', 'Audiosrv')) {
+    Set-Service $service -StartupType Manual
+    Start-Service $service
+}
+$audioResult = Join-Path $PSScriptRoot '../artifacts/audio-interfaces.txt'
+$audioCheck = Start-Process $app -ArgumentList '--verify-audio', "`"$audioResult`"" -Wait -PassThru
+if ($audioCheck.ExitCode -ne 0) { throw (Get-Content $audioResult -Raw) }
 # Render the actual settings window with sample devices, independent of CI audio hardware.
 $preview = Start-Process $app -ArgumentList '--preview' -PassThru
 try {

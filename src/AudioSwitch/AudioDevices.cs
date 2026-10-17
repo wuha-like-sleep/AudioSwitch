@@ -67,6 +67,14 @@ internal static class AudioDevices
         finally { Marshal.ReleaseComObject(policy); }
     }
 
+    public static void VerifyInterfaces()
+    {
+        _ = List();
+        _ = Default();
+        var policy = (IPolicyConfig)new PolicyConfig();
+        Marshal.ReleaseComObject(policy);
+    }
+
     [DllImport("ole32.dll")] private static extern int PropVariantClear(ref PropVariant value);
 }
 
@@ -86,7 +94,7 @@ internal interface IMMDeviceEnumerator
     [PreserveSig] int EnumAudioEndpoints(int flow, uint mask, out IMMDeviceCollection devices);
     [PreserveSig] int GetDefaultAudioEndpoint(int flow, int role, out IMMDevice device);
 }
-[ComImport, Guid("0BD7A1BE-7A1A-44DB-8397-C0A09B9DC4B7"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+[ComImport, Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 internal interface IMMDeviceCollection
 {
     [PreserveSig] int GetCount(out uint count);
