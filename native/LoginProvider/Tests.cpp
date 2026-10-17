@@ -193,6 +193,12 @@ void VerifyAutoPolicy() {
 }
 int wmain(int argc, wchar_t** argv) {
     if (argc != 2 && argc != 3) return 2;
+    if (argc == 3 && wcscmp(argv[2], L"--check-binding") == 0) {
+        uint64_t phone = 0;
+        const bool found = Bridge::ReadBinding(L"S-1-5-21-100-200-300-1001", &phone);
+        std::cout << "Synthetic binding: present=" << found << " valid=" << (phone == 0x123456789ABC) << "\n";
+        return found && phone == 0x123456789ABC ? 0 : 4;
+    }
     const bool denyBound = argc == 3 && wcscmp(argv[2], L"--deny-bound") == 0;
     CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     auto library = LoadLibraryW(argv[1]); if (!library) return 3;

@@ -47,6 +47,9 @@ try {
         Set-ItemProperty $binding -Name Automatic -Value 1
         & $test $registered '--deny-bound'
         if ($LASTEXITCODE -ne 0) { throw 'Broker allowed a non-LogonUI caller' }
+        Write-Host "Synthetic registry phone: $((Get-ItemProperty $binding).Phone)"
+        & $test $registered '--check-binding'
+        if ($LASTEXITCODE -ne 0) { throw 'Native fixture binding is not readable before the launch test' }
         $probeStart = [Diagnostics.ProcessStartInfo]::new((Join-Path $install 'AudioSwitch.LoginBridge.exe'))
         $probeStart.UseShellExecute = $true
         $probeStart.Verb = 'runas'

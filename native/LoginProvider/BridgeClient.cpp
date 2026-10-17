@@ -80,7 +80,9 @@ DWORD EnrollLocalCredential(PCWSTR sid) {
 }
 
 DWORD ProbeServicePhone(PCWSTR sid) {
-    uint64_t phone = 0; if (!Bridge::ReadBinding(sid, &phone) || !phone) return ERROR_NOT_FOUND;
+    uint64_t phone = 0;
+    if (!Bridge::ReadBinding(sid, &phone)) return ERROR_NOT_FOUND;
+    if (!phone) return ERROR_INVALID_DATA;
     Bridge::Request request; request.intent = Bridge::Intent::ServiceProbe; wcsncpy_s(request.sid, sid, _TRUNCATE);
     Bridge::Response response;
     if (!Exchange(request, response, nullptr)) return ERROR_SERVICE_NOT_ACTIVE;
