@@ -226,6 +226,11 @@ internal static class SettingsStore
         var buffered = connected with { Signal = -66 };
         if (guard.Evaluate(config, buffered, now).Healthy) throw new InvalidOperationException("Custom signal recovery buffer was ignored.");
         if (!guard.Evaluate(config, connected, now).Healthy) throw new InvalidOperationException("Strong signal failed custom recovery buffer.");
+        guard.Evaluate(config, connected with { Signal = -85, SignalAt = now.AddSeconds(1) }, now.AddSeconds(1));
+        var bufferState = guard.Evaluate(config, connected with { Signal = -70, SignalAt = now.AddSeconds(5) }, now.AddSeconds(5));
+        if (bufferState.Remaining != 11) throw new InvalidOperationException("Recovery buffer cancelled a pending weak-signal countdown too early.");
+        if (guard.Evaluate(config, connected with { SignalAt = now.AddSeconds(6) }, now.AddSeconds(6)).Remaining != null)
+            throw new InvalidOperationException("Signal recovery failed to cancel countdown.");
         guard.Reset(); config = config with { SignalHysteresis = 5 };
         guard.Evaluate(config, connected, now);
         var weak = connected with { Signal = -85, SignalAt = now.AddSeconds(1) };

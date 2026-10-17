@@ -22,6 +22,7 @@ internal sealed class ProximityGuard
         { armed = true; awaySince = null; return new("手机在附近，监测中", Healthy: true); }
         if (!armed) return new("等待手机连接或靠近，尚未启用锁屏判定");
         bool away = (settings.Mode != "signal" && phone.Connected == false) || ((signalMode || combined) && fresh && phone.Signal <= settings.SignalThreshold);
+        if (!away && awaySince != null && (signalMode || combined) && fresh && phone.Signal <= recoveryThreshold) away = true;
         if (!away) { awaySince = null; return new("信号处于缓冲区域，继续监测"); }
         awaySince ??= now;
         int remaining = Math.Max(0, Math.Clamp(settings.DelaySeconds, 15, 120) - (int)(now - awaySince.Value).TotalSeconds);
