@@ -133,3 +133,5 @@ CI 检查虚构记录的 DPAPI 往返、密文不含测试密码、受限令牌�
 限制：通道不可用也可能由配置、服务占用或无线干扰导致，不等于精确离开；恢复认证不证明人在场，仍不防蓝牙中继。不适用于无密码微软账户、本地/组织账户、开机首次登录；系统 Hello / PIN 始终作为独立入口。
 
 资料：[CredUI](https://learn.microsoft.com/en-us/windows/win32/api/wincred/nf-wincred-creduipromptforwindowscredentialsw)、[LogonUserW](https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-logonuserw)、[DPAPI 范围](https://learn.microsoft.com/en-us/windows/win32/seccrypto/example-c-program-using-cryptprotectdata)、[自动默认凭据](https://learn.microsoft.com/en-us/windows/win32/api/credentialprovider/nf-credentialprovider-icredentialprovider-getcredentialcount)、[CredentialsChanged](https://learn.microsoft.com/en-us/windows/win32/api/credentialprovider/nf-credentialprovider-icredentialproviderevents-credentialschanged)。
+
+0.3.6 Preview 1 发行代码：`9cfc1eb5e6e2fced96b7be9a616686fbb3464c4f`。[Windows CI 39026011908](https://github.com/wuha-like-sleep/AudioSwitch/actions/runs/39026011908) 三架构构建成功；x64 DPAPI、受限令牌读取拒绝、篡改、身份不符、撤销、单次策略、自动线程启动/取消及无许可不通知、服务与安装检查通过。数据仅为虚构测试凭据，没有执行真实微软账户初始化或解锁。
