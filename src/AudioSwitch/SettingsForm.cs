@@ -14,12 +14,15 @@ internal sealed class SettingsForm : ChromeForm
     private readonly Label headphoneStatus = new() { AutoSize = true, ForeColor = Theme.Muted };
     private readonly Label speakerStatus = new() { AutoSize = true, ForeColor = Theme.Muted };
     private List<OutputDevice> knownDevices = [];
+    private readonly Label shortcutHelp = new() { Dock = DockStyle.Fill, ForeColor = Theme.Muted, Padding = new Padding(0, 8, 0, 0) };
+    private Draft? original;
+    internal bool HasUnsavedChanges => original != null && CurrentDraft() != original;
     private uint modifiers;
     private Keys hotkey;
     public Settings? Selection { get; private set; }
     public bool StartWithWindows => startup.Checked;
 
-    public SettingsForm(List<OutputDevice> devices, Settings? settings, Func<Settings, bool, string?>? saveSettings = null)
+    public SettingsForm(List<OutputDevice> devices, Settings? settings, Func<Settings, bool, string?>? saveSettings = null, Func<Task>? checkUpdates = null)
     {
         Text = "AudioSwitch · 设置";
         Icon = BrandIcon.Load();
@@ -101,11 +104,28 @@ internal sealed class SettingsForm : ChromeForm
         var capture = new TextBox { ReadOnly = true, Dock = DockStyle.Top, BackColor = Color.FromArgb(240, 244, 255), ForeColor = Accent, BorderStyle = BorderStyle.FixedSingle, Text = HotkeyWindow.Describe(modifiers, hotkey), AccessibleName = "点击后按下新快捷键" };
         capture.KeyDown += (_, e) =>
         {
+            if (e.KeyCode is Keys.Tab or Keys.Escape or Keys.Enter) return;
             e.SuppressKeyPress = true;
             uint mods = (e.Control ? 2u : 0) | (e.Alt ? 1u : 0) | (e.Shift ? 4u : 0);
-            if (HotkeyWindow.Valid(mods, e.KeyCode)) { modifiers = mods; hotkey = e.KeyCode; capture.Text = HotkeyWindow.Describe(mods, hotkey); }
+            if (e.KeyCode is Keys.ControlKey or Keys.Menu or Keys.ShiftKey) return;
+            if (HotkeyWindow.Valid(mods, e.KeyCode))
+            {
+                modifiers = mods; hotkey = e.KeyCode; capture.Text = HotkeyWindow.Describe(mods, hotkey);
+                ShowShortcutHelp("快捷键已选择，保存后生效。", false);
+            }
+            else ShowShortcutHelp(e.KeyCode == Keys.F12 ? "F12 为系统保留键，请选择 F1–F11 或字母、数字。" : "请按 Ctrl / Alt + 字母、数字或 F1–F11，可加 Shift。", true);
         };
-        options.Controls.Add(capture, 1, 1);
+        var shortcutRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Margin = Padding.Empty };
+        shortcutRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        shortcutRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 68));
+        var resetShortcut = new ThemeButton { Text = "重置", Dock = DockStyle.Fill, Margin = new Padding(8, 0, 0, 0), AccessibleName = "恢复默认快捷键 Ctrl Alt F11" };
+        resetShortcut.Click += (_, _) =>
+        {
+            modifiers = 3; hotkey = Keys.F11; capture.Text = HotkeyWindow.Describe(modifiers, hotkey);
+            ShowShortcutHelp("已恢复默认快捷键，保存后生效。", false);
+        };
+        shortcutRow.Controls.Add(capture, 0, 0); shortcutRow.Controls.Add(resetShortcut, 1, 0);
+        options.Controls.Add(shortcutRow, 1, 1);
         options.Controls.Add(startup, 0, 2); options.Controls.Add(autoUpdate, 1, 2);
         options.Controls.Add(new Label { Text = "切换提示屏幕", AutoSize = true, Padding = new Padding(0, 8, 0, 0) }, 0, 3);
         var monitorRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Margin = Padding.Empty };
@@ -125,18 +145,35 @@ internal sealed class SettingsForm : ChromeForm
         FillMonitors(settings?.ToastMonitor ?? "");
         optionSurface.Controls.Add(options);
         root.Controls.Add(optionSurface, 0, 3);
-        root.Controls.Add(new Label { Text = "点击快捷键框后，按 Ctrl / Alt + 字母、数字或 F1–F11，可加 Shift。\n切换播放与通信输出，麦克风保持原设置。保存后即可在托盘使用。", ForeColor = Muted, Dock = DockStyle.Fill, Padding = new Padding(0, 8, 0, 0) }, 0, 4);
+        ShowShortcutHelp("点击快捷键框后，按 Ctrl / Alt + 字母、数字或 F1–F11，可加 Shift。", false);
+        root.Controls.Add(shortcutHelp, 0, 4);
         var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false, Margin = Padding.Empty };
         var save = ActionButton("保存设置", true);
         var cancel = ActionButton("取消", false); cancel.DialogResult = DialogResult.Cancel;
         var refresh = ActionButton("刷新设备", false);
-        footer.Controls.AddRange([save, cancel, refresh]); root.Controls.Add(footer, 0, 5);
+        var update = ActionButton("检查更新", false); update.Enabled = checkUpdates != null;
+        update.Click += async (_, _) =>
+        {
+            if (checkUpdates == null) return;
+            update.Enabled = false;
+            try { await checkUpdates(); }
+            catch (Exception ex) { if (!IsDisposed) AppDialog.Show(this, ex.Message, "检查更新失败"); }
+            finally { if (!update.IsDisposed) update.Enabled = true; }
+        };
+        footer.Controls.AddRange([save, cancel, refresh, update]); root.Controls.Add(footer, 0, 5);
         Controls.Add(root); root.BringToFront(); AcceptButton = save; CancelButton = cancel;
         Fill(devices, settings?.Headphones, settings?.Speakers);
         headphones.SelectedIndexChanged += (_, _) => UpdateConnectionStatus();
         speakers.SelectedIndexChanged += (_, _) => UpdateConnectionStatus();
         UpdateConnectionStatus();
         outputStatus.Text = "设备状态自动刷新";
+        original = CurrentDraft();
+        FormClosing += (_, e) =>
+        {
+            if (e.CloseReason is CloseReason.WindowsShutDown or CloseReason.TaskManagerClosing or CloseReason.ApplicationExitCall) return;
+            if (DialogResult != DialogResult.OK && HasUnsavedChanges && !AppDialog.ConfirmDiscard(this))
+            { e.Cancel = true; DialogResult = DialogResult.None; }
+        };
         refresh.Click += (_, _) =>
         {
             try { Fill(AudioDevices.List(), (headphones.SelectedItem as Choice)?.Id, (speakers.SelectedItem as Choice)?.Id); FillMonitors((toastMonitor.SelectedItem as Choice)?.Id ?? ""); }
@@ -153,6 +190,15 @@ internal sealed class SettingsForm : ChromeForm
             Selection = candidate; DialogResult = DialogResult.OK;
         };
     }
+    private void ShowShortcutHelp(string text, bool invalid)
+    {
+        shortcutHelp.Text = text + "\n切换播放与通信输出，麦克风保持原设置。";
+        shortcutHelp.ForeColor = invalid ? Color.FromArgb(185, 65, 65) : Muted;
+    }
+    private Draft CurrentDraft() => new((headphones.SelectedItem as Choice)?.Id, (speakers.SelectedItem as Choice)?.Id,
+        modifiers, hotkey, startup.Checked, autoUpdate.Checked, (toastMonitor.SelectedItem as Choice)?.Id ?? "");
+    private sealed record Draft(string? Headphones, string? Speakers, uint Modifiers, Keys Key, bool Startup, bool AutoUpdate, string Monitor);
+
     private void FillMonitors(string preferred)
     {
         toastMonitor.Items.Clear();
@@ -205,7 +251,7 @@ internal sealed class SettingsForm : ChromeForm
         // Preserve focus and an open picker while devices are plugged in or removed.
         if (!headphones.DroppedDown && !speakers.DroppedDown && !knownDevices.SequenceEqual(devices))
             Fill(devices, (headphones.SelectedItem as Choice)?.Id, (speakers.SelectedItem as Choice)?.Id);
-        outputStatus.Text = "正在播放 · " + (devices.FirstOrDefault(d => d.Id == current)?.Name ?? "无可用输出");
+        outputStatus.Text = "当前输出 · " + (devices.FirstOrDefault(d => d.Id == current)?.Name ?? "无可用输出");
         UpdateConnectionStatus();
     }
     private void UpdateConnectionStatus()

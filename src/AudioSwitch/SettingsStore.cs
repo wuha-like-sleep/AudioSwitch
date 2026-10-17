@@ -18,6 +18,15 @@ internal static class SettingsStore
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
 
+    private static IEnumerable<Control> Descendants(Control root)
+    {
+        foreach (Control child in root.Controls)
+        {
+            yield return child;
+            foreach (var nested in Descendants(child)) yield return nested;
+        }
+    }
+
     public static void Verify(string resultPath)
     {
         string path = Path.Combine(Path.GetDirectoryName(resultPath)!, "settings-roundtrip.json");
@@ -44,6 +53,24 @@ internal static class SettingsStore
         {
             form.Show();
             form.UpdateDevices([new OutputDevice(second.Headphones, "Reconnected headphones")], second.Headphones);
+            if (form.HasUnsavedChanges) throw new InvalidOperationException("Connection refresh incorrectly marked settings as modified.");
+            var toggle = Descendants(form).OfType<Toggle>().First(c => c.Text == "启动时检查新版本");
+            toggle.Checked = !toggle.Checked;
+            if (!form.HasUnsavedChanges) throw new InvalidOperationException("Changed preferences were not detected.");
+            using (var dismiss = new System.Windows.Forms.Timer { Interval = 100 })
+            {
+                dismiss.Tick += (_, _) =>
+                {
+                    var dialog = Application.OpenForms.OfType<AppDialog>().FirstOrDefault();
+                    if (dialog != null) { dismiss.Stop(); dialog.AcceptButton!.PerformClick(); }
+                };
+                dismiss.Start();
+                form.Close();
+            }
+            if (form.IsDisposed || !form.Visible)
+                throw new InvalidOperationException("Default discard confirmation did not preserve the editing window.");
+            toggle.Checked = !toggle.Checked;
+            if (form.HasUnsavedChanges) throw new InvalidOperationException("Restoring preferences still marked settings as modified.");
             form.AcceptButton!.PerformClick();
             if (saved != second || form.Selection != second)
                 throw new InvalidOperationException("Saving preferences lost disconnected device selections.");

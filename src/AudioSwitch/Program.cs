@@ -26,7 +26,11 @@ internal static class Program
         {
             using var preview = new SettingsForm(
                 [new("preview-headphones", "USB 耳机 · Headphones"), new("preview-speakers", "USB 音箱 · Speakers")],
-                new Settings("preview-headphones", "preview-speakers"));
+                new Settings("preview-headphones", "preview-speakers"), checkUpdates: () =>
+                {
+                    AppDialog.Show($"当前版本 {UpdateService.CurrentTag} 已是最新版本。", "已经是最新版本");
+                    return Task.CompletedTask;
+                });
             preview.UpdateDevices([new("preview-headphones", "USB 耳机 · Headphones"), new("preview-speakers", "USB 音箱 · Speakers")], "preview-headphones");
             preview.ShowDialog();
             return;
@@ -132,7 +136,7 @@ internal sealed class TrayContext : ApplicationContext
         configuring = true;
         try
         {
-            using var form = new SettingsForm(AudioDevices.List(), settings, SaveSettings);
+            using var form = new SettingsForm(AudioDevices.List(), settings, SaveSettings, () => updates.CheckAsync(false));
             settingsForm = form;
             RefreshStatus();
             form.ShowDialog();
