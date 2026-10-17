@@ -10,7 +10,7 @@
 一个快捷键，在专注与外放之间切换。
 
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-465CE8?logo=windows&logoColor=white)](#安装)
-[![Release](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-v0.2.2--preview.4-465CE8)](https://github.com/wuha-like-sleep/AudioSwitch/releases)
+[![Release](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-v0.2.3--preview.1-465CE8)](https://github.com/wuha-like-sleep/AudioSwitch/releases)
 [![Build](https://github.com/wuha-like-sleep/AudioSwitch/actions/workflows/build.yml/badge.svg)](https://github.com/wuha-like-sleep/AudioSwitch/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/License-MIT-22A77A)](LICENSE)
 
@@ -22,7 +22,7 @@
 
 <br />
 
-![AudioSwitch 设置界面](docs/images/settings-0.2.2-preview4.png)
+![AudioSwitch 设置界面](docs/images/settings-0.2.3-preview1.png)
 
 <div align="center"><sub>Windows 实际运行截图 · 展示使用示例设备</sub></div>
 
@@ -33,19 +33,23 @@
 
 **更新下载**
 
-![更新下载界面](docs/images/update-0.2.2-preview4.png)
+![更新下载界面](docs/images/update-0.2.3-preview1.png)
 
 **版本检查结果**
 
-![版本提示界面](docs/images/dialog-0.2.2-preview4.png)
+![版本提示界面](docs/images/dialog-0.2.3-preview1.png)
+
+**提示样式**
+
+![提示位置与停留时间](docs/images/style-0.2.3-preview1.png)
 
 **切换提示**
 
-![切换提示](docs/images/toast-0.2.2-preview4.png)
+![切换提示](docs/images/toast-0.2.3-preview1.png)
 
 **安装向导**
 
-![安装向导](docs/images/installer-0.2.2-preview4.png)
+![安装向导](docs/images/installer-0.2.3-preview1.png)
 
 </details>
 
@@ -63,9 +67,9 @@
 
 | 你的电脑 | 下载 |
 | :--- | :--- |
-| Intel / AMD 64 位电脑 · 大多数用户选择此项 | **[Windows x64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.2.2-preview.4/AudioSwitch-Setup-win-x64.exe)** |
-| Windows ARM64 电脑 | [Windows ARM64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.2.2-preview.4/AudioSwitch-Setup-win-arm64.exe) |
-| Windows 10 32 位电脑 | [Windows x86](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.2.2-preview.4/AudioSwitch-Setup-win-x86.exe) |
+| Intel / AMD 64 位电脑 · 大多数用户选择此项 | **[Windows x64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.2.3-preview.1/AudioSwitch-Setup-win-x64.exe)** |
+| Windows ARM64 电脑 | [Windows ARM64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.2.3-preview.1/AudioSwitch-Setup-win-arm64.exe) |
+| Windows 10 32 位电脑 | [Windows x86](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.2.3-preview.1/AudioSwitch-Setup-win-x86.exe) |
 
 运行安装向导，选择安装位置、自启动和桌面快捷方式。程序默认安装到当前用户目录，安装完成后从开始菜单打开 **AudioSwitch**。
 
@@ -81,7 +85,7 @@
 
 ## 用起来需要知道的事
 
-**关于多屏提示。** 设置页的“切换提示屏幕”默认跟随系统主屏，也可指定某一块显示器。点击“预览”可在保存前确认提示位置。屏幕选择会保存；指定屏幕断开时临时回退主屏，保留原选择。Windows 若重新编号显示器，可刷新并重新选择。
+**关于多屏提示。** 设置页的“切换提示屏幕”默认跟随系统主屏，也可指定某一块显示器。点击“样式”可用屏幕示意区域选择四个角落，停留时间可选 1.5、2.2、3、5 秒；“预览”可在保存前确认真实效果。屏幕选择会保存；指定屏幕断开时临时回退主屏，保留原选择。Windows 若重新编号显示器，可刷新并重新选择。
 
 **关于游戏。** 可在设置中关闭“显示切换提示”，成功切换保持安静，错误仍会提醒；“预览”可随时测试提示位置。窗口化和无边框全屏是提示窗口的主要使用场景。提示不抢焦点、不拦截鼠标；独占全屏游戏可能遮住桌面提示。游戏或通话软件固定了独立输出时，需要先将其改为“系统默认”。
 
