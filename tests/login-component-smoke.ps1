@@ -34,6 +34,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Installed provider loading failed' }
     & $test $registered '--vault-tests'
     if ($LASTEXITCODE -ne 0) { throw 'Protected vault and automatic policy checks failed' }
+    Add-Content (Join-Path $PSScriptRoot '../artifacts/login-component-checks.txt') 'DPAPI vault roundtrip, restricted-token read denial, tamper rejection, identity mismatch, revocation and automatic single-attempt policy passed with fictional credentials.'
     # A synthetic admin-created binding cannot turn a regular process into LogonUI.
     $binding = 'HKLM:\SOFTWARE\AudioSwitch\LoginBridge\Bindings\S-1-5-21-100-200-300-1001'
     try {
@@ -41,6 +42,7 @@ try {
         & $test $registered '--deny-bound'
         if ($LASTEXITCODE -ne 0) { throw 'Missing phone value bypassed the phone gate' }
         Set-ItemProperty $binding -Name Phone -Value '123456789ABC'
+        Set-ItemProperty $binding -Name Automatic -Value 1
         & $test $registered '--deny-bound'
         if ($LASTEXITCODE -ne 0) { throw 'Broker allowed a non-LogonUI caller' }
         Stop-Service 'AudioSwitchLoginBridge'

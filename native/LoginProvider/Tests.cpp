@@ -44,6 +44,15 @@ public:
     IFACEMETHODIMP GetCount(DWORD* value) override { *value = 2; return S_OK; }
     IFACEMETHODIMP GetAt(DWORD index, ICredentialProviderUser** value) override { if (index > 1) return E_INVALIDARG; *value = new User(index == 0); return S_OK; }
 };
+class Events final : public ICredentialProviderEvents {
+    LONG refs = 1;
+public:
+    LONG calls = 0;
+    IFACEMETHODIMP QueryInterface(REFIID iid, void** value) override { *value = nullptr; if (iid != IID_IUnknown && iid != IID_ICredentialProviderEvents) return E_NOINTERFACE; *value = this; AddRef(); return S_OK; }
+    IFACEMETHODIMP_(ULONG) AddRef() override { return InterlockedIncrement(&refs); }
+    IFACEMETHODIMP_(ULONG) Release() override { auto n = InterlockedDecrement(&refs); if (!n) delete this; return n; }
+    IFACEMETHODIMP CredentialsChanged(UINT_PTR) override { InterlockedIncrement(&calls); return S_OK; }
+};
 void Verify(IClassFactory* factory, bool denyBound) {
     ComPtr<ICredentialProvider> provider;
     Check(SUCCEEDED(factory->CreateInstance(nullptr, IID_PPV_ARGS(&provider))), "Create provider");
@@ -52,6 +61,8 @@ void Verify(IClassFactory* factory, bool denyBound) {
     ComPtr<ICredentialProviderSetUserArray> setUsers; Check(SUCCEEDED(provider.As(&setUsers)), "V2 user array");
     ComPtr<ICredentialProviderUserArray> users; users.Attach(new Users());
     Check(SUCCEEDED(setUsers->SetUserArray(users.Get())), "Set users");
+    ComPtr<Events> events; events.Attach(new Events());
+    Check(SUCCEEDED(provider->Advise(events.Get(), 47)), "Advise native automatic worker");
     for (auto scenario : {CPUS_LOGON, CPUS_UNLOCK_WORKSTATION}) {
         Check(SUCCEEDED(provider->SetUsageScenario(scenario, 0)), "Set scenario");
         DWORD count = 999, selected = 0; BOOL automatic = TRUE;
@@ -115,6 +126,8 @@ void Verify(IClassFactory* factory, bool denyBound) {
         Check(SUCCEEDED(credential->ReportResult(static_cast<NTSTATUS>(0xC000006D), 0, &status, &icon)) && status && icon == CPSI_ERROR, "Failure advises system fallback"); CoTaskMemFree(status);
         credential->GetStringValue(2, &remaining); Check(!*remaining, "Failure clears password"); CoTaskMemFree(remaining);
     }
+    Check(SUCCEEDED(provider->UnAdvise()), "Cancel automatic worker");
+    Check(events->calls == 0, "No automatic callback without an authenticated phone proof");
 }
 void VerifyVault() {
     constexpr wchar_t testSid[] = L"S-1-5-21-100-200-300-1001";
