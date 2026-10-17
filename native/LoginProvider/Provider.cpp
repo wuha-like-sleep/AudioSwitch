@@ -163,12 +163,13 @@ public:
         return S_OK; // LogonUI owns the buffer and Windows decides whether it authenticates.
     }
     IFACEMETHODIMP ReportResult(NTSTATUS statusCode, NTSTATUS substatus, PWSTR* status, CREDENTIAL_PROVIDER_STATUS_ICON* icon) override {
-        if (!status || !icon) return E_POINTER;
-        *status = nullptr; *icon = CPSI_NONE; SetDeselected();
+        if (status) *status = nullptr;
+        if (icon) *icon = CPSI_NONE;
+        SetDeselected();
         if (automaticSubmitted) LoginDiagnostics::Write(sid, L"WindowsResult", statusCode < 0 ? 0 : 1, static_cast<DWORD>(statusCode), static_cast<DWORD>(substatus));
         if (automaticSubmitted && statusCode < 0) Vault::Revoke(sid);
         automaticSubmitted = false;
-        if (statusCode < 0) {
+        if (statusCode < 0 && status && icon) {
             *icon = CPSI_ERROR; wchar_t message[256]{};
             swprintf_s(message, L"Windows 未接受该凭据（状态 0x%08lX，子状态 0x%08lX）。请使用系统 PIN / Windows Hello；自动提交失败后需重新初始化。", static_cast<DWORD>(statusCode), static_cast<DWORD>(substatus));
             return CopyText(message, status);

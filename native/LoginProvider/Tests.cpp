@@ -81,6 +81,7 @@ void Verify(IClassFactory* factory, bool denyBound) {
         ComPtr<ICredentialProviderCredential2> v2; Check(SUCCEEDED(credential.As(&v2)), "V2 credential");
         PWSTR sid = nullptr; Check(SUCCEEDED(v2->GetUserSid(&sid)) && wcscmp(sid, L"S-1-5-21-100-200-300-1001") == 0, "SID binding"); CoTaskMemFree(sid);
         Check(SUCCEEDED(credential->SetSelected(&automatic)) && !automatic, "Selection cannot autologon");
+        Check(SUCCEEDED(credential->ReportResult(static_cast<NTSTATUS>(0xC000006D), static_cast<NTSTATUS>(0xC000006A), nullptr, nullptr)), "ReportResult accepts optional null outputs");
         CREDENTIAL_PROVIDER_GET_SERIALIZATION_RESPONSE response{};
         CREDENTIAL_PROVIDER_CREDENTIAL_SERIALIZATION serialization{}; PWSTR status = nullptr; CREDENTIAL_PROVIDER_STATUS_ICON icon{};
         Check(SUCCEEDED(credential->GetSerialization(&response, &serialization, &status, &icon)), "Empty password result");
