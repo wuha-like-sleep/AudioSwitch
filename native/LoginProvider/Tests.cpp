@@ -178,6 +178,8 @@ void VerifyVault() {
     std::cout << "DPAPI roundtrip, restricted registry access, identity mismatch, ciphertext tampering and revocation checks passed with fictional credentials.\n";
 }
 void VerifyAutoPolicy() {
+    Check(Bridge::CanArmAbsence(10060, Bridge::PhoneStage::Wait), "Radio timeout can count as absence");
+    Check(!Bridge::CanArmAbsence(10013, Bridge::PhoneStage::Connect) && !Bridge::CanArmAbsence(10060, Bridge::PhoneStage::Encryption) && !Bridge::CanArmAbsence(ERROR_NOT_FOUND, Bridge::PhoneStage::Pairing), "Authentication, local configuration and missing pairing cannot arm unlock");
     BYTE nonce[32]{}; nonce[0] = 1;
     Bridge::AutoPolicy policy;
     Check(!policy.Present(nonce, 1000, 7, 2), "Phone initially present cannot immediately unlock");
@@ -210,6 +212,10 @@ int wmain(int argc, wchar_t** argv) {
         }
         Check(canUnload() == S_OK, "No leaked COM objects");
         Bridge::Request request; request.session = 2; request.nonce[0] = 1; wcscpy_s(request.sid, L"S-1-5-21-100-200-300-1001");
+        request.intent = Bridge::Intent::ServiceProbe;
+        Check(Bridge::ValidRequest(request), "Explicit service diagnostic request supported");
+        request.payloadBytes = 1; Check(!Bridge::ValidRequest(request), "Service probe cannot carry credentials"); request.payloadBytes = 0;
+        request.intent = Bridge::Intent::Manual;
         Bridge::Response reply; reply.result = Bridge::Result::Verified; reply.session = request.session; reply.phone = 0x123456789ABC; reply.completed = 10000; memcpy(reply.nonce, request.nonce, sizeof(reply.nonce));
         Check(Bridge::ValidResponse(request, reply, reply.phone, 11000), "Fresh proof accepted");
         Check(!Bridge::ValidResponse(request, reply, reply.phone, 12001), "Expired proof rejected");
