@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Microsoft.Win32;
 
 namespace AudioSwitch;
 
@@ -24,23 +25,38 @@ internal static class Program
         if (!first) { if (!args.Contains("--startup")) HotkeyWindow.OpenExistingSettings(); return; }
         if (args.Contains("--preview"))
         {
-            bool previewHeadphones = true;
+            int previewIndex = 0;
+            List<OutputDevice> previewDevices = [new("preview-headphones", "USB 耳机"), new("preview-speakers", "蓝牙音箱"), new("preview-hdmi", "显示器 · HDMI")];
             SettingsForm? previewForm = null;
             using var preview = new SettingsForm(
-                [new("preview-headphones", "USB 耳机 · Headphones"), new("preview-speakers", "USB 音箱 · Speakers")],
-                new Settings("preview-headphones", "preview-speakers"), checkUpdates: () =>
+                previewDevices,
+                new Settings("preview-headphones", "preview-speakers", Devices: previewDevices), checkUpdates: () =>
                 {
                     AppDialog.Show($"当前版本 {UpdateService.CurrentTag} 已是最新版本。", "已经是最新版本");
                     return Task.CompletedTask;
                 }, switchOutput: () =>
                 {
-                    previewHeadphones = !previewHeadphones;
-                    previewForm?.UpdateDevices([new("preview-headphones", "USB 耳机 · Headphones"), new("preview-speakers", "USB 音箱 · Speakers")], previewHeadphones ? "preview-headphones" : "preview-speakers");
+                    previewIndex = (previewIndex + 1) % previewDevices.Count;
+                    previewForm?.UpdateDevices(previewDevices, previewDevices[previewIndex].Id);
+                }, showDiagnostics: () => AppDialog.Show(Diagnostics.Build(null, false), "诊断信息"), configureProximity: current =>
+                {
+                    using var dialog = new ProximityForm(current, () => [new("sample-phone", "我的手机", true, -60, DateTimeOffset.UtcNow)], () => null);
+                    return dialog.ShowDialog() == DialogResult.OK ? dialog.Selection : current;
                 });
             previewForm = preview;
-            preview.UpdateDevices([new("preview-headphones", "USB 耳机 · Headphones"), new("preview-speakers", "USB 音箱 · Speakers")], "preview-headphones");
+            preview.UpdateDevices(previewDevices, previewDevices[0].Id);
             preview.ShowDialog();
             return;
+        }
+        if (args.Contains("--preview-devices"))
+        {
+            using var preview = new DeviceSelectionForm([new("a", "USB 耳机"), new("b", "蓝牙音箱"), new("c", "显示器 · HDMI")], [new("a", "USB 耳机"), new("b", "蓝牙音箱"), new("c", "显示器 · HDMI")]);
+            preview.ShowDialog(); return;
+        }
+        if (args.Contains("--preview-proximity"))
+        {
+            using var preview = new ProximityForm(new(false, "sample-phone"), () => [new("sample-phone", "我的手机", true, -60, DateTimeOffset.UtcNow)], () => null);
+            preview.ShowDialog(); return;
         }
         if (args.Contains("--preview-style"))
         {
@@ -66,7 +82,7 @@ internal static class Program
     }
 }
 
-internal sealed record Settings(string Headphones, string Speakers, uint HotkeyModifiers = 3, Keys HotkeyKey = Keys.F11, bool AutoCheckUpdates = true, string ToastMonitor = "", bool ShowSwitchNotifications = true, string ToastCorner = "bottom-right", int ToastDuration = 2200);
+internal sealed record Settings(string Headphones, string Speakers, uint HotkeyModifiers = 3, Keys HotkeyKey = Keys.F11, bool AutoCheckUpdates = true, string ToastMonitor = "", bool ShowSwitchNotifications = true, string ToastCorner = "bottom-right", int ToastDuration = 2200, List<OutputDevice>? Devices = null, ProximitySettings? Proximity = null);
 
 internal sealed class TrayContext : ApplicationContext
 {
@@ -77,10 +93,16 @@ internal sealed class TrayContext : ApplicationContext
     private readonly ToolStripMenuItem switchItem;
     private readonly ToolStripMenuItem startupItem;
     private readonly ToolStripMenuItem outputItem = new("正在读取输出…") { Enabled = false };
-    private readonly ToolStripMenuItem headphoneItem;
-    private readonly ToolStripMenuItem speakerItem;
+    private readonly ToolStripMenuItem deviceMenu = new("选择输出设备");
+    private string? deviceMenuSignature;
     private readonly UpdateService updates;
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 2500 };
+    private readonly BluetoothPresence bluetooth = new();
+    private readonly ProximityGuard proximityGuard = new();
+    private readonly ToolStripMenuItem lockStatus = new("离开锁屏：关闭") { Enabled = false };
+    private readonly ToolStripMenuItem pauseLock = new("暂停离开锁屏") { CheckOnClick = true };
+    private volatile bool sessionLocked, resetProximity, suspended;
+    private bool lockCountdownNotified;
     private Settings? settings;
     private bool configuring;
     private SettingsForm? settingsForm;
@@ -99,13 +121,11 @@ internal sealed class TrayContext : ApplicationContext
         catch (Exception ex) { Notify("配置读取失败，请重新选择设备。" + ex.Message, true); }
         hotkey = new HotkeyWindow(() => { if (!configuring) Switch(); }, Configure);
         hotkey.TryChange(settings?.HotkeyModifiers ?? 3, settings?.HotkeyKey ?? Keys.F11);
-        switchItem = new ToolStripMenuItem("切换耳机 / 音箱", null, (_, _) => Switch());
+        switchItem = new ToolStripMenuItem("循环切换输出", null, (_, _) => Switch());
         menu.Items.Add(outputItem);
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add(switchItem);
-        headphoneItem = new ToolStripMenuItem("耳机", null, (_, _) => SelectOutput(true));
-        speakerItem = new ToolStripMenuItem("音箱", null, (_, _) => SelectOutput(false));
-        menu.Items.Add(headphoneItem); menu.Items.Add(speakerItem);
+        menu.Items.Add(deviceMenu);
         menu.Items.Add("设备设置…", null, (_, _) => Configure());
         startupItem = new ToolStripMenuItem("登录 Windows 后自动启动", null, (_, _) =>
         {
@@ -113,27 +133,34 @@ internal sealed class TrayContext : ApplicationContext
             catch (Exception ex) { Notify("无法修改自启动：" + ex.Message, true); }
         });
         menu.Items.Add(startupItem);
+        menu.Items.Add(lockStatus); menu.Items.Add(pauseLock);
+        pauseLock.CheckedChanged += (_, _) => { proximityGuard.Reset(); RefreshProximity(); };
         menu.Items.Add("检查更新…", null, async (_, _) => await updates.CheckAsync(false));
         menu.Opening += (_, _) => { RefreshMenu(); RefreshStatus(); };
         RefreshMenu();
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("退出", null, (_, _) => ExitThread());
         tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) Switch(); };
-        timer.Tick += (_, _) => RefreshStatus();
+        timer.Tick += (_, _) => { RefreshStatus(); RefreshProximity(); };
+        SystemEvents.SessionSwitch += SessionChanged;
+        SystemEvents.PowerModeChanged += PowerChanged;
+        if (settings?.Proximity?.Enabled == true) bluetooth.Start();
         timer.Start();
         if (!hotkey.Registered) Notify("快捷键注册失败，可能已被其他程序占用。请在设置中更换。", true);
         // Open setup after the WinForms message loop starts.
         SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
-        SynchronizationContext.Current!.Post(async _ =>
+        SynchronizationContext.Current!.Post(_ =>
         {
+            bool configuredAtLaunch = settings != null;
+            if (settings?.AutoCheckUpdates == true) _ = updates.CheckAsync(true);
             if (!startup) Configure(); else RefreshStatus();
-            if (settings?.AutoCheckUpdates == true) await updates.CheckAsync(true);
+            if (!configuredAtLaunch && settings?.AutoCheckUpdates == true) _ = updates.CheckAsync(true);
         }, null);
     }
 
     private void RefreshMenu()
     {
-        switchItem.Text = "切换耳机 / 音箱（" + HotkeyWindow.Describe(settings?.HotkeyModifiers ?? 3, settings?.HotkeyKey ?? Keys.F11) + "）";
+        switchItem.Text = "循环切换输出（" + HotkeyWindow.Describe(settings?.HotkeyModifiers ?? 3, settings?.HotkeyKey ?? Keys.F11) + "）";
         try { startupItem.Checked = StartupService.Enabled; }
         catch { startupItem.Checked = false; }
     }
@@ -148,7 +175,7 @@ internal sealed class TrayContext : ApplicationContext
         configuring = true;
         try
         {
-            using var form = new SettingsForm(AudioDevices.List(), settings, SaveSettings, () => updates.CheckAsync(false), Switch);
+            using var form = new SettingsForm(AudioDevices.List(), settings, SaveSettings, () => updates.CheckAsync(false), Switch, () => AppDialog.Show(Diagnostics.Build(settings, hotkey.Registered), "诊断信息"), ConfigureProximity);
             settingsForm = form;
             RefreshStatus();
             form.ShowDialog();
@@ -156,6 +183,42 @@ internal sealed class TrayContext : ApplicationContext
         catch (Exception ex) { AppDialog.Show("读取音频设备失败：" + ex.Message, "无法打开设置"); }
         finally { settingsForm = null; configuring = false; }
     }
+
+    private ProximitySettings? ConfigureProximity(ProximitySettings? current)
+    {
+        bluetooth.Start();
+        using var form = new ProximityForm(current, bluetooth.Snapshot, () => bluetooth.Error);
+        return form.ShowDialog(settingsForm) == DialogResult.OK ? form.Selection : current;
+    }
+    private void SessionChanged(object sender, SessionSwitchEventArgs e)
+    {
+        if (e.Reason == SessionSwitchReason.SessionLock) sessionLocked = true;
+        if (e.Reason == SessionSwitchReason.SessionUnlock) sessionLocked = false;
+        resetProximity = true;
+    }
+    private void PowerChanged(object sender, PowerModeChangedEventArgs e)
+    {
+        suspended = e.Mode == PowerModes.Suspend;
+        resetProximity = true;
+    }
+    private void RefreshProximity()
+    {
+        if (resetProximity) { proximityGuard.Reset(); resetProximity = false; }
+        pauseLock.Enabled = settings?.Proximity?.Enabled == true;
+        if (configuring || sessionLocked || suspended || pauseLock.Checked || bluetooth.Error != null)
+        {
+            proximityGuard.Reset(); lockCountdownNotified = false; lockStatus.Text = "离开锁屏：暂停"; return;
+        }
+        var phone = bluetooth.Snapshot().FirstOrDefault(p => p.Id == settings?.Proximity?.PhoneId);
+        var state = proximityGuard.Evaluate(settings?.Proximity, phone, DateTimeOffset.UtcNow);
+        lockStatus.Text = state.Message;
+        if (state.Remaining != null && !lockCountdownNotified)
+        { Notify(state.Message + "。可从托盘暂停离开锁屏。"); lockCountdownNotified = true; }
+        if (state.Remaining == null) lockCountdownNotified = false;
+        if (state.ShouldLock && !LockWorkStation()) Notify("自动锁屏失败，请使用 Win + L 手动锁屏。", true);
+    }
+    [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool LockWorkStation();
 
     private string? SaveSettings(Settings candidate, bool startWithWindows)
     {
@@ -178,17 +241,14 @@ internal sealed class TrayContext : ApplicationContext
                 throw;
             }
             settings = candidate;
+            proximityGuard.Reset();
+            if (settings.Proximity?.Enabled == true) bluetooth.Start();
+            RefreshProximity();
             RefreshMenu(); RefreshStatus();
             Notify("设置已保存。按 " + HotkeyWindow.Describe(candidate.HotkeyModifiers, candidate.HotkeyKey) + " 即可切换。");
             return null;
         }
         catch (Exception ex) { return $"保存设置失败：{ex.Message}\r\n错误码：0x{ex.HResult:X8}\r\n你的选择已保留，可以修改后重试。"; }
-    }
-
-    private void SelectOutput(bool headphones)
-    {
-        if (settings == null) { Configure(); return; }
-        Apply(headphones ? settings.Headphones : settings.Speakers);
     }
 
     private void Switch()
@@ -198,7 +258,7 @@ internal sealed class TrayContext : ApplicationContext
         {
             var devices = AudioDevices.List();
             var target = SwitchTarget.Choose(settings, AudioDevices.Default(), devices.Select(d => d.Id));
-            if (target == null) { Notify("耳机和音箱都未连接，请连接设备后重试。", true); return; }
+            if (target == null) { Notify("循环列表中的设备均未连接，请连接设备后重试。", true); return; }
             Apply(target);
         }
         catch (Exception ex) { Notify("切换失败：" + ex.Message, true); }
@@ -209,15 +269,15 @@ internal sealed class TrayContext : ApplicationContext
         try
         {
             var device = AudioDevices.List().FirstOrDefault(d => d.Id == id);
-            if (device == null) { Notify("目标设备未连接。请插入 USB 设备，或在设置中重新选择。", true); return; }
+            if (device == null) { Notify("目标设备未连接。请连接设备，或在设置中重新选择。", true); return; }
             if (AudioDevices.Default() == id)
             {
-                ShowSwitchToast("正在使用" + (id == settings?.Headphones ? "耳机" : "音箱"), device.Name);
+                ShowSwitchToast("正在使用此设备", device.Name);
                 return;
             }
             AudioDevices.SetDefault(id);
             RefreshStatus();
-            ShowSwitchToast(id == settings?.Headphones ? "耳机" : "音箱", device.Name);
+            ShowSwitchToast("已切换输出", device.Name);
         }
         catch (Exception ex) { Notify("切换未完成，部分默认输出可能已经改变。请检查 Windows 声音设置。\n" + ex.Message, true); }
     }
@@ -238,21 +298,19 @@ internal sealed class TrayContext : ApplicationContext
             var current = AudioDevices.Default();
             var name = devices.FirstOrDefault(d => d.Id == current)?.Name ?? "无输出设备";
             outputItem.Text = "当前输出：" + name;
-            UpdateOutputItem(headphoneItem, "耳机", settings?.Headphones, devices, current);
-            UpdateOutputItem(speakerItem, "音箱", settings?.Speakers, devices, current);
-            switchItem.Enabled = settings == null || headphoneItem.Enabled || speakerItem.Enabled;
+            UpdateDeviceMenu(devices, current);
+            switchItem.Enabled = settings == null || SwitchTarget.Order(settings).Any(d => devices.Any(k => k.Id == d.Id));
             settingsForm?.UpdateDevices(devices, current);
             string text = "当前：" + name;
             tray.Text = text.Length > 63 ? text[..60] + "…" : text;
-            // If the current configured endpoint disappeared, restore the other configured endpoint.
-            if (settings != null && previousOutput != null
-                && (previousOutput == settings.Headphones || previousOutput == settings.Speakers)
-                && !devices.Any(d => d.Id == previousOutput)
-                && current != settings.Headphones && current != settings.Speakers)
+            if (settings != null && previousOutput != null)
             {
-                bool h = devices.Any(d => d.Id == settings.Headphones);
-                bool s = devices.Any(d => d.Id == settings.Speakers);
-                if (h != s) AudioDevices.SetDefault(h ? settings.Headphones : settings.Speakers);
+                var order = SwitchTarget.Order(settings);
+                if (order.Any(d => d.Id == previousOutput) && devices.All(d => d.Id != previousOutput) && order.All(d => d.Id != current))
+                {
+                    var fallback = SwitchTarget.Choose(settings, previousOutput, devices.Select(d => d.Id));
+                    if (fallback != null) AudioDevices.SetDefault(fallback);
+                }
             }
             previousOutput = current;
             lastError = null;
@@ -261,24 +319,33 @@ internal sealed class TrayContext : ApplicationContext
         {
             tray.Text = "音频切换：无法读取音频状态";
             outputItem.Text = "暂时无法读取音频状态";
-            headphoneItem.Enabled = false; speakerItem.Enabled = false;
+            deviceMenu.Enabled = false;
             if (lastError != ex.Message) { Notify("音频状态读取失败：" + ex.Message, true); lastError = ex.Message; }
         }
     }
 
-    private static void UpdateOutputItem(ToolStripMenuItem item, string label, string? id, List<OutputDevice> devices, string? current)
+    private void UpdateDeviceMenu(List<OutputDevice> devices, string? current)
     {
-        var device = devices.FirstOrDefault(d => d.Id == id);
-        item.Text = label + (id == null ? " · 尚未设置" : device == null ? " · 未连接" : " · " + device.Name);
-        item.Enabled = device != null;
-        item.Checked = id != null && id == current;
+        var order = settings == null ? [] : SwitchTarget.Order(settings);
+        string signature = System.Text.Json.JsonSerializer.Serialize(new { order, devices, current });
+        deviceMenu.Enabled = order.Count > 0;
+        if (signature == deviceMenuSignature) return;
+        deviceMenuSignature = signature;
+        foreach (ToolStripItem item in deviceMenu.DropDownItems.Cast<ToolStripItem>().ToArray()) item.Dispose();
+        deviceMenu.DropDownItems.Clear();
+        foreach (var configured in order)
+        {
+            var online = devices.FirstOrDefault(d => d.Id == configured.Id);
+            var item = new ToolStripMenuItem((online?.Name ?? configured.Name) + (online == null ? " · 未连接" : "")) { Enabled = online != null, Checked = current == configured.Id };
+            item.Click += (_, _) => Apply(configured.Id); deviceMenu.DropDownItems.Add(item);
+        }
     }
 
     private void Notify(string message, bool error = false) => tray.ShowBalloonTip(3500, "音频切换", message, error ? ToolTipIcon.Warning : ToolTipIcon.Info);
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { timer.Stop(); timer.Dispose(); toast?.Dispose(); updates.Dispose(); hotkey.Dispose(); tray.Visible = false; tray.Dispose(); menu.Dispose(); }
+        if (disposing) { SystemEvents.SessionSwitch -= SessionChanged; SystemEvents.PowerModeChanged -= PowerChanged; bluetooth.Dispose(); timer.Stop(); timer.Dispose(); toast?.Dispose(); updates.Dispose(); hotkey.Dispose(); tray.Visible = false; tray.Dispose(); menu.Dispose(); }
         base.Dispose(disposing);
     }
 }

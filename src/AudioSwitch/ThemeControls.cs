@@ -84,7 +84,8 @@ internal sealed class ThemeButton : Control, IButtonControl
 internal sealed class Toggle : Control
 {
     private bool isChecked;
-    public bool Checked { get => isChecked; set { isChecked = value; Invalidate(); } }
+    public event EventHandler? CheckedChanged;
+    public bool Checked { get => isChecked; set { if (isChecked == value) return; isChecked = value; Invalidate(); CheckedChanged?.Invoke(this, EventArgs.Empty); } }
     public Toggle() { TabStop = true; AccessibleRole = AccessibleRole.CheckButton; AutoSize = false; Size = new Size(285, 32); Cursor = Cursors.Hand; SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true); }
     protected override void OnPaintBackground(PaintEventArgs e) => e.Graphics.Clear(Color.White);
     protected override void OnClick(EventArgs e) { Focus(); Checked = !Checked; base.OnClick(e); }

@@ -5,19 +5,19 @@ internal sealed class SettingsForm : ChromeForm
     private static readonly Color Ink = Theme.Ink;
     private static readonly Color Muted = Theme.Muted;
     private static readonly Color Accent = Theme.Accent;
-    private readonly ComboBox headphones = DevicePicker();
-    private readonly ComboBox speakers = DevicePicker();
+    private List<OutputDevice> selectedDevices = [];
+    private readonly Label deviceSummary = new() { Dock = DockStyle.Fill, ForeColor = Theme.Ink, AutoEllipsis = true };
     private readonly ComboBox toastMonitor = DevicePicker();
     private readonly Toggle startup = new() { Text = "登录 Windows 后自动启动" };
     private readonly Toggle autoUpdate = new() { Text = "启动时检查新版本" };
     private readonly Label outputStatus = new() { Dock = DockStyle.Fill, AutoEllipsis = true, TextAlign = ContentAlignment.MiddleRight, ForeColor = Theme.Muted };
-    private readonly Label headphoneStatus = new() { AutoSize = true, ForeColor = Theme.Muted };
-    private readonly Label speakerStatus = new() { AutoSize = true, ForeColor = Theme.Muted };
+
     private List<OutputDevice> knownDevices = [];
     private readonly Label shortcutHelp = new() { Dock = DockStyle.Fill, ForeColor = Theme.Muted, Padding = new Padding(0, 8, 0, 0) };
     private Draft? original;
     internal bool HasUnsavedChanges => original != null && CurrentDraft() != original;
     private readonly Toggle showToast = new() { Text = "显示切换提示", Height = 28, Margin = Padding.Empty };
+    private ProximitySettings? proximity;
     private string toastCorner;
     private int toastDuration;
     private uint modifiers;
@@ -25,8 +25,10 @@ internal sealed class SettingsForm : ChromeForm
     public Settings? Selection { get; private set; }
     public bool StartWithWindows => startup.Checked;
 
-    public SettingsForm(List<OutputDevice> devices, Settings? settings, Func<Settings, bool, string?>? saveSettings = null, Func<Task>? checkUpdates = null, Action? switchOutput = null)
+    public SettingsForm(List<OutputDevice> devices, Settings? settings, Func<Settings, bool, string?>? saveSettings = null, Func<Task>? checkUpdates = null, Action? switchOutput = null, Action? showDiagnostics = null, Func<ProximitySettings?, ProximitySettings?>? configureProximity = null)
     {
+        selectedDevices = settings == null ? [] : SwitchTarget.Order(settings);
+        proximity = settings?.Proximity;
         Text = "AudioSwitch · 设置";
         Icon = BrandIcon.Load();
         Font = new Font("Microsoft YaHei UI", 10);
@@ -79,7 +81,7 @@ internal sealed class SettingsForm : ChromeForm
         }, 1, 0);
         hero.Controls.Add(new Label
         {
-            Text = "选择输出设备，设置你的切换方式。", ForeColor = Muted, Dock = DockStyle.Fill,
+            Text = "管理多个输出设备，按自己的顺序随手切换。", ForeColor = Muted, Dock = DockStyle.Fill,
             TextAlign = ContentAlignment.TopLeft, Padding = new Padding(1, 5, 0, 0), Margin = Padding.Empty
         }, 1, 1);
         var author = new Label
@@ -87,8 +89,17 @@ internal sealed class SettingsForm : ChromeForm
             Text = $"{UpdateService.CurrentTag}\n开发者  wuha-like-sleep", ForeColor = Muted, Font = new Font(Font.FontFamily, 9),
             Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleRight, Margin = Padding.Empty
         };
-        hero.Controls.Add(author, 2, 0);
-        hero.SetRowSpan(author, 2);
+        var authorBox = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = Padding.Empty };
+        authorBox.RowStyles.Add(new RowStyle(SizeType.Absolute, 34)); authorBox.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        authorBox.Controls.Add(author, 0, 0);
+        var lockSettings = new ThemeButton { Text = proximity?.Enabled == true ? "离开锁屏 · 开启" : "离开锁屏 · 关闭", Dock = DockStyle.Fill, Margin = new Padding(20, 0, 0, 0), Enabled = configureProximity != null };
+        lockSettings.Click += (_, _) =>
+        {
+            proximity = configureProximity?.Invoke(proximity);
+            lockSettings.Text = proximity?.Enabled == true ? "离开锁屏 · 开启" : "离开锁屏 · 关闭";
+        };
+        authorBox.Controls.Add(lockSettings, 0, 1);
+        hero.Controls.Add(authorBox, 2, 0); hero.SetRowSpan(authorBox, 2);
         root.Controls.Add(hero, 0, 0);
         var deviceHeading = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, Margin = Padding.Empty };
         deviceHeading.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
@@ -96,7 +107,7 @@ internal sealed class SettingsForm : ChromeForm
         deviceHeading.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108));
         deviceHeading.Controls.Add(new Label { Text = "输出设备", Font = new Font(Font, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
         deviceHeading.Controls.Add(outputStatus, 1, 0);
-        var switchNow = new ThemeButton { Text = "立即切换", Dock = DockStyle.Fill, Margin = new Padding(12, 6, 0, 6), Enabled = settings != null && switchOutput != null, AccessibleName = "立即切换已保存的耳机与音箱" };
+        var switchNow = new ThemeButton { Text = "立即切换", Dock = DockStyle.Fill, Margin = new Padding(12, 6, 0, 6), Enabled = settings != null && switchOutput != null, AccessibleName = "立即循环切换已保存的输出设备" };
         switchNow.Click += (_, _) => switchOutput?.Invoke();
         var hints = new ToolTip();
         hints.SetToolTip(switchNow, "按已保存的设备配置切换；修改设备后请先保存。");
@@ -104,11 +115,19 @@ internal sealed class SettingsForm : ChromeForm
         FormClosed += (_, _) => hints.Dispose();
         deviceHeading.Controls.Add(switchNow, 2, 0);
         root.Controls.Add(deviceHeading, 0, 1);
-        var cards = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Margin = Padding.Empty };
-        cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-        cards.Controls.Add(DeviceCard("耳机", "个人聆听、游戏与通话", headphones), 0, 0);
-        cards.Controls.Add(DeviceCard("音箱", "外放音乐与共享播放", speakers), 1, 0);
-        root.Controls.Add(cards, 0, 2);
+        var deviceCard = new RoundedPanel { Dock = DockStyle.Fill, Padding = new Padding(20), Margin = Padding.Empty };
+        var deviceBody = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, RowCount = 2, BackColor = Color.White };
+        deviceBody.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100)); deviceBody.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
+        deviceBody.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); deviceBody.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+        deviceBody.Controls.Add(new Label { Text = "快捷键循环列表", Font = new Font(Font, FontStyle.Bold), ForeColor = Accent, Dock = DockStyle.Fill }, 0, 0);
+        deviceBody.Controls.Add(deviceSummary, 0, 1);
+        var manageDevices = new ThemeButton { Text = "管理设备", Dock = DockStyle.Top, Height = 42 };
+        manageDevices.Click += (_, _) =>
+        {
+            using var form = new DeviceSelectionForm(knownDevices, selectedDevices);
+            if (form.ShowDialog(this) == DialogResult.OK) { selectedDevices = form.Selection; UpdateDeviceSummary(); }
+        };
+        deviceBody.Controls.Add(manageDevices, 1, 1); deviceCard.Controls.Add(deviceBody); root.Controls.Add(deviceCard, 0, 2);
         var optionSurface = new RoundedPanel { Dock = DockStyle.Fill, Padding = new Padding(20), Margin = new Padding(0, 16, 0, 0) };
         var options = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = Padding.Empty, ColumnCount = 2, RowCount = 4, Margin = Padding.Empty };
         options.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45)); options.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
@@ -182,12 +201,12 @@ internal sealed class SettingsForm : ChromeForm
             catch (Exception ex) { if (!IsDisposed) AppDialog.Show(this, ex.Message, "检查更新失败"); }
             finally { if (!update.IsDisposed) update.Enabled = true; }
         };
-        footer.Controls.AddRange([save, cancel, refresh, update]); root.Controls.Add(footer, 0, 5);
+        var diagnostics = ActionButton("诊断信息", false); diagnostics.Enabled = showDiagnostics != null;
+        diagnostics.Click += (_, _) => showDiagnostics?.Invoke();
+        footer.Controls.AddRange([save, cancel, refresh, update, diagnostics]); root.Controls.Add(footer, 0, 5);
         Controls.Add(root); root.BringToFront(); AcceptButton = save; CancelButton = cancel;
-        Fill(devices, settings?.Headphones, settings?.Speakers);
-        headphones.SelectedIndexChanged += (_, _) => UpdateConnectionStatus();
-        speakers.SelectedIndexChanged += (_, _) => UpdateConnectionStatus();
-        UpdateConnectionStatus();
+        knownDevices = devices.ToList();
+        UpdateDeviceSummary();
         outputStatus.Text = "设备状态自动刷新";
         original = CurrentDraft();
         FormClosing += (_, e) =>
@@ -198,15 +217,13 @@ internal sealed class SettingsForm : ChromeForm
         };
         refresh.Click += (_, _) =>
         {
-            try { Fill(AudioDevices.List(), (headphones.SelectedItem as Choice)?.Id, (speakers.SelectedItem as Choice)?.Id); FillMonitors((toastMonitor.SelectedItem as Choice)?.Id ?? ""); }
+            try { UpdateDevices(AudioDevices.List(), AudioDevices.Default()); FillMonitors((toastMonitor.SelectedItem as Choice)?.Id ?? ""); }
             catch (Exception ex) { AppDialog.Show(this, ex.Message, "刷新失败"); }
         };
         save.Click += (_, _) =>
         {
-            if (headphones.SelectedItem is not Choice h || speakers.SelectedItem is not Choice s)
-            { AppDialog.Show(this, "请选择耳机和音箱。", "设备未选全"); return; }
-            if (h.Id == s.Id) { AppDialog.Show(this, "耳机和音箱必须是两个不同的输出设备。", "设备重复"); return; }
-            var candidate = new Settings(h.Id, s.Id, modifiers, hotkey, autoUpdate.Checked, (toastMonitor.SelectedItem as Choice)?.Id ?? "", showToast.Checked, toastCorner, toastDuration);
+            if (selectedDevices.Count == 0) { AppDialog.Show(this, "请先在管理设备中选择至少一台输出设备。", "尚未选择设备"); return; }
+            var candidate = new Settings(selectedDevices[0].Id, selectedDevices.ElementAtOrDefault(1)?.Id ?? selectedDevices[0].Id, modifiers, hotkey, autoUpdate.Checked, (toastMonitor.SelectedItem as Choice)?.Id ?? "", showToast.Checked, toastCorner, toastDuration, selectedDevices.ToList(), proximity);
             var error = saveSettings?.Invoke(candidate, StartWithWindows);
             if (error != null) { AppDialog.Show(this, error, "设置未保存"); return; }
             Selection = candidate; DialogResult = DialogResult.OK;
@@ -217,9 +234,9 @@ internal sealed class SettingsForm : ChromeForm
         shortcutHelp.Text = text + "\n切换播放与通信输出，麦克风保持原设置。";
         shortcutHelp.ForeColor = invalid ? Color.FromArgb(185, 65, 65) : Muted;
     }
-    private Draft CurrentDraft() => new((headphones.SelectedItem as Choice)?.Id, (speakers.SelectedItem as Choice)?.Id,
-        modifiers, hotkey, startup.Checked, autoUpdate.Checked, (toastMonitor.SelectedItem as Choice)?.Id ?? "", showToast.Checked, toastCorner, toastDuration);
-    private sealed record Draft(string? Headphones, string? Speakers, uint Modifiers, Keys Key, bool Startup, bool AutoUpdate, string Monitor, bool ShowToast, string Corner, int Duration);
+    private Draft CurrentDraft() => new(System.Text.Json.JsonSerializer.Serialize(selectedDevices.Select(d => d.Id)),
+        modifiers, hotkey, startup.Checked, autoUpdate.Checked, (toastMonitor.SelectedItem as Choice)?.Id ?? "", showToast.Checked, toastCorner, toastDuration, System.Text.Json.JsonSerializer.Serialize(proximity));
+    private sealed record Draft(string Devices, uint Modifiers, Keys Key, bool Startup, bool AutoUpdate, string Monitor, bool ShowToast, string Corner, int Duration, string Proximity);
 
     private void FillMonitors(string preferred)
     {
@@ -241,59 +258,22 @@ internal sealed class SettingsForm : ChromeForm
         toastMonitor.SelectedItem = match;
     }
     private static ComboBox DevicePicker() => new DeviceComboBox();
-    private Panel DeviceCard(string title, string subtitle, ComboBox picker)
-    {
-        var card = new RoundedPanel { Dock = DockStyle.Fill, SurfaceColor = Color.White, Padding = new Padding(18), Margin = new Padding(0, 0, title == "耳机" ? 12 : 0, 0) };
-        var layout = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent, ColumnCount = 1, RowCount = 3 };
-        layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 38)); layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        layout.Controls.Add(new Label { Text = title, BackColor = Color.White, ForeColor = Accent, Font = new Font(Font.FontFamily, 15, FontStyle.Bold), AutoSize = true }, 0, 0);
-        var status = title == "耳机" ? headphoneStatus : speakerStatus;
-        status.Text = subtitle;
-        layout.Controls.Add(status, 0, 1);
-        layout.Controls.Add(picker, 0, 2); card.Controls.Add(layout); return card;
-    }
     private static ThemeButton ActionButton(string text, bool primary)
     {
         return new ThemeButton { Text = text, Primary = primary, Size = new Size(132, 46), Font = new Font("Microsoft YaHei UI", 10, primary ? FontStyle.Bold : FontStyle.Regular), Margin = new Padding(12, 8, 0, 0) };
     }
-    private void Fill(List<OutputDevice> devices, string? h, string? s)
-    {
-        knownDevices = devices.ToList();
-        headphones.Items.Clear(); speakers.Items.Clear();
-        foreach (var device in devices)
-        {
-            string label = devices.Count(d => d.Name == device.Name) > 1 ? $"{device.Name} [{device.Id[^Math.Min(12, device.Id.Length)..]}]" : device.Name;
-            headphones.Items.Add(new Choice(device.Id, label)); speakers.Items.Add(new Choice(device.Id, label));
-        }
-        RestoreChoice(headphones, h, "已保存的耳机 · 未连接");
-        RestoreChoice(speakers, s, "已保存的音箱 · 未连接");
-    }
     public void UpdateDevices(List<OutputDevice> devices, string? current)
     {
-        // Preserve focus and an open picker while devices are plugged in or removed.
-        if (!headphones.DroppedDown && !speakers.DroppedDown && !knownDevices.SequenceEqual(devices))
-            Fill(devices, (headphones.SelectedItem as Choice)?.Id, (speakers.SelectedItem as Choice)?.Id);
+        knownDevices = devices.ToList();
+        selectedDevices = selectedDevices.Select(d => devices.FirstOrDefault(online => online.Id == d.Id) ?? d).ToList();
         outputStatus.Text = "当前输出 · " + (devices.FirstOrDefault(d => d.Id == current)?.Name ?? "无可用输出");
-        UpdateConnectionStatus();
+        UpdateDeviceSummary();
     }
-    private void UpdateConnectionStatus()
+    private void UpdateDeviceSummary()
     {
-        UpdateConnection(headphones, headphoneStatus);
-        UpdateConnection(speakers, speakerStatus);
-    }
-    private void UpdateConnection(ComboBox picker, Label label)
-    {
-        bool chosen = picker.SelectedItem is Choice;
-        bool online = picker.SelectedItem is Choice choice && knownDevices.Any(d => d.Id == choice.Id);
-        label.Text = !chosen ? "请选择一个输出设备" : online ? "已连接 · 可以切换" : "未连接 · 插入后自动识别";
-        label.ForeColor = online ? Color.FromArgb(27, 139, 103) : Muted;
-    }
-    private static void RestoreChoice(ComboBox picker, string? id, string offlineLabel)
-    {
-        if (string.IsNullOrEmpty(id)) { picker.SelectedIndex = -1; return; }
-        var choice = picker.Items.Cast<Choice>().FirstOrDefault(c => c.Id == id);
-        if (choice == null) { choice = new Choice(id, offlineLabel); picker.Items.Add(choice); }
-        picker.SelectedItem = choice;
+        deviceSummary.Text = selectedDevices.Count == 0 ? "尚未选择设备，点击管理设备开始。\n支持 USB、蓝牙、HDMI 等 Windows 音频输出。"
+            : string.Join("\n", selectedDevices.Take(3).Select((d, i) => $"{i + 1}. {d.Name} · {(knownDevices.Any(k => k.Id == d.Id) ? "已连接" : "未连接")}"))
+                + (selectedDevices.Count > 3 ? $"\n另有 {selectedDevices.Count - 3} 台设备" : "");
     }
     private sealed record Choice(string Id, string Label) { public override string ToString() => Label; }
 }

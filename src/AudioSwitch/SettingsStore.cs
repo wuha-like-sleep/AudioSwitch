@@ -83,7 +83,7 @@ internal static class SettingsStore
             toggle.Checked = !toggle.Checked;
             if (form.HasUnsavedChanges) throw new InvalidOperationException("Restoring preferences still marked settings as modified.");
             form.AcceptButton!.PerformClick();
-            if (saved != second || form.Selection != second)
+            if (saved == null || saved with { Devices = null } != second || form.Selection! with { Devices = null } != second)
                 throw new InvalidOperationException("Saving preferences lost disconnected device selections.");
             form.Close();
         }
@@ -149,6 +149,64 @@ internal static class SettingsStore
             if (style.Corner != "bottom-right") throw new InvalidOperationException("Visual corner selection failed.");
             style.Close();
         }
+        if (UpdateService.CancellationMessage(false, false, false, true) == null
+            || UpdateService.CancellationMessage(false, false, false, false) == null
+            || UpdateService.CancellationMessage(false, true, false, true) != null
+            || UpdateService.CancellationMessage(false, false, true, true) != null
+            || UpdateService.CancellationMessage(true, false, false, false) != null)
+            throw new InvalidOperationException("Update timeout and cancellation feedback failed.");
+        string diagnostic = Diagnostics.Build(second, true);
+        if (!diagnostic.Contains(UpdateService.CurrentTag) || diagnostic.Contains(second.Headphones) || diagnostic.Contains(second.Speakers))
+            throw new InvalidOperationException("Diagnostics version or device identifier privacy failed.");
+        var many = first with { Devices = [new("a", "USB"), new("b", "Bluetooth"), new("c", "HDMI")], Proximity = new(true, "phone", "signal", 60, -85) };
+        Write(path, many);
+        var restored = Read(path)!;
+        if (!SwitchTarget.Order(restored).SequenceEqual(many.Devices!) || restored.Proximity != many.Proximity)
+            throw new InvalidOperationException("Multiple devices or proximity settings failed to roundtrip.");
+        if (SwitchTarget.Choose(many, "a", ["a", "b", "c"]) != "b"
+            || SwitchTarget.Choose(many, "b", ["a", "c"]) != "c"
+            || SwitchTarget.Choose(many, "c", ["a", "b", "c"]) != "a"
+            || SwitchTarget.Choose(many, "external", ["c"]) != "c")
+            throw new InvalidOperationException("Multi-device cycle order or offline skipping failed.");
+        using (var chooser = new DeviceSelectionForm(many.Devices!, many.Devices!))
+        {
+            chooser.Show(); chooser.MoveDevice("c", -1);
+            if (!chooser.Selection.Select(d => d.Id).SequenceEqual(["a", "c", "b"])) throw new InvalidOperationException("Visual device reordering failed.");
+            chooser.Close();
+        }
+        VerifyProximity();
+        using (var presence = new BluetoothPresence())
+        {
+            presence.Start(); Application.DoEvents(); _ = presence.Snapshot();
+            // A runner may have no Bluetooth adapter. An API loading failure must still fail verification.
+            if (presence.Error?.Contains("Could not load", StringComparison.OrdinalIgnoreCase) == true) throw new InvalidOperationException(presence.Error);
+        }
         File.Delete(path);
     }
+    private static void VerifyProximity()
+    {
+        var guard = new ProximityGuard(); var config = new ProximitySettings(true, "phone", "disconnect", 15);
+        var now = DateTimeOffset.UtcNow;
+        var connected = new PhoneSnapshot("phone", "Phone", true, -60, now);
+        var disconnected = connected with { Connected = false };
+        if (guard.Evaluate(config, disconnected, now).ShouldLock) throw new InvalidOperationException("Locked without ever seeing phone connected.");
+        guard.Evaluate(config, connected, now);
+        if (guard.Evaluate(config, disconnected, now.AddSeconds(1)).Remaining != 15) throw new InvalidOperationException("Disconnect countdown did not start.");
+        if (guard.Evaluate(config, connected, now.AddSeconds(5)).Remaining != null) throw new InvalidOperationException("Reconnection did not cancel countdown.");
+        guard.Evaluate(config, disconnected, now.AddSeconds(6));
+        if (!guard.Evaluate(config, disconnected, now.AddSeconds(21)).ShouldLock || guard.Evaluate(config, disconnected, now.AddSeconds(22)).ShouldLock)
+            throw new InvalidOperationException("Disconnect lock or one-shot behavior failed.");
+        guard.Reset(); config = config with { Mode = "signal" };
+        guard.Evaluate(config, connected, now);
+        var weak = connected with { Signal = -85, SignalAt = now.AddSeconds(1) };
+        guard.Evaluate(config, weak, now.AddSeconds(1));
+        if (guard.Evaluate(config, weak, now.AddSeconds(22)).ShouldLock) throw new InvalidOperationException("Stale signal triggered lock.");
+        weak = weak with { SignalAt = now.AddSeconds(23) }; guard.Evaluate(config, weak, now.AddSeconds(23));
+        weak = weak with { SignalAt = now.AddSeconds(38) };
+        if (!guard.Evaluate(config, weak, now.AddSeconds(38)).ShouldLock) throw new InvalidOperationException("Fresh sustained weak signal did not trigger lock.");
+        guard.Reset(); guard.Evaluate(config, connected, now);
+        if (guard.Evaluate(config, null, now.AddSeconds(1)).ShouldLock) throw new InvalidOperationException("Missing device status triggered lock.");
+        if (guard.Evaluate(config with { Enabled = false }, disconnected, now.AddSeconds(90)).ShouldLock) throw new InvalidOperationException("Disabled proximity triggered lock.");
+    }
+
 }

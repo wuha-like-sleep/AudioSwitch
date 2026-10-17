@@ -16,7 +16,7 @@ internal sealed class UpdateService : IDisposable
     private bool manualOpen;
     private UpdateProgressForm? activeProgress;
     private static string Repository => Assembly.GetExecutingAssembly().GetCustomAttributes<AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == "GitHubRepository")?.Value ?? "";
-    internal static string CurrentTag => Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.2.3-preview.1";
+    internal static string CurrentTag => Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.3.0-preview.1";
     public UpdateService(Action<string> notify)
     {
         this.notify = notify;
@@ -54,6 +54,7 @@ internal sealed class UpdateService : IDisposable
         UpdateProgressForm? checking = null;
         string? downloadDirectory = null;
         bool userCancelled = false;
+        CancellationToken downloadToken = default;
         try
         {
             if (!Regex.IsMatch(Repository, @"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")) throw new InvalidOperationException("此构建尚未连接 GitHub 更新源。");
@@ -90,8 +91,9 @@ internal sealed class UpdateService : IDisposable
             Directory.CreateDirectory(downloadDirectory);
             string target = Path.Combine(downloadDirectory, filename);
             using var progress = new UpdateProgressForm();
-            activeProgress = progress; progress.Show();
-            using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, progress.Token);
+            activeProgress = progress; downloadToken = progress.Token; progress.Show();
+            using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token, downloadToken);
+            cancellation.CancelAfter(TimeSpan.FromMinutes(5));
             using (var download = await http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellation.Token))
             {
                 download.EnsureSuccessStatusCode();
@@ -122,8 +124,8 @@ internal sealed class UpdateService : IDisposable
         {
             userCancelled = checking?.Token.IsCancellationRequested ?? userCancelled;
             checking?.Close();
-            if (!silent && !userCancelled && !lifetime.IsCancellationRequested && downloadDirectory == null)
-                AppDialog.Show("连接 GitHub 超时。请检查网络后重试。", "检查更新超时", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            var message = CancellationMessage(silent, userCancelled || downloadToken.IsCancellationRequested, lifetime.IsCancellationRequested, downloadDirectory != null);
+            if (message != null) AppDialog.Show(message, "更新超时", MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
         catch (Exception ex)
         {
@@ -137,6 +139,11 @@ internal sealed class UpdateService : IDisposable
             if (downloadDirectory != null) { try { Directory.Delete(downloadDirectory, true); } catch (IOException) { } catch (UnauthorizedAccessException) { } }
             if (!silent) manualOpen = false;
         }
+    }
+    internal static string? CancellationMessage(bool silent, bool userCancelled, bool exiting, bool downloading)
+    {
+        if (silent || userCancelled || exiting) return null;
+        return downloading ? "下载安装包超时，未完成的文件已清理。请检查网络后重新检查更新。" : "连接 GitHub 超时。请检查网络后重试。";
     }
     public void Dispose() { lifetime.Cancel(); http.Dispose(); }
 }

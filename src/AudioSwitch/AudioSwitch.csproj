@@ -1,7 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <UseWindowsForms>true</UseWindowsForms>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
@@ -12,8 +12,8 @@
     <Company>wuha-like-sleep</Company>
     <Copyright>Copyright © 2026 wuha-like-sleep</Copyright>
     <GitHubRepository Condition="'$(GitHubRepository)' == ''">wuha-like-sleep/AudioSwitch</GitHubRepository>
-    <Version>0.2.3</Version>
-    <InformationalVersion>0.2.3-preview.1</InformationalVersion>
+    <Version>0.3.0</Version>
+    <InformationalVersion>0.3.0-preview.1</InformationalVersion>
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="Assets/app.ico" />
