@@ -49,8 +49,8 @@ SolidCompression=yes
 CloseApplications=no
 RestartApplications=no
 [Files]
-Source: "{#SourceDir}\AudioSwitch.LoginProvider.dll"; DestDir: "{app}"; Flags: ignoreversion uninsrestartdelete
-Source: "{#SourceDir}\AudioSwitch.LoginBridge.exe"; DestDir: "{app}"; Flags: ignoreversion uninsrestartdelete
+Source: "{#SourceDir}\AudioSwitch.LoginProvider.dll"; DestDir: "{app}"; Flags: ignoreversion restartreplace uninsrestartdelete
+Source: "{#SourceDir}\AudioSwitch.LoginBridge.exe"; DestDir: "{app}"; Flags: ignoreversion restartreplace uninsrestartdelete
 Source: "..\src\AudioSwitch\Assets\app.ico"; DestDir: "{app}"
 Source: "..\native\LoginProvider\NOTICE.txt"; DestDir: "{app}"
 Source: "..\LICENSE"; DestDir: "{app}"

@@ -52,7 +52,7 @@ internal sealed class LoginComponentForm : ChromeForm
                     diagnostics += $"{time} · {state} [错误 {error} / 0x{error:X8}；{(stage is "Phone" or "ServiceProbe" ? "蓝牙阶段" : "子状态")} 0x{substatus:X8}]\r\n";
                 }
                 brokenBinding = bound != null && bound.GetValue("Phone") is not string;
-                componentVersion = LoginComponentInstaller.InstalledVersion;
+                componentVersion = $"辅助工具 {LoginComponentInstaller.InstalledVersion} / 登录 DLL {LoginComponentInstaller.ProviderVersion}";
                 registration = key == null ? "未注册实验组件" : "已注册实验组件";
                 automatic = brokenBinding ? "手机绑定地址不可用，自动提交不能工作；请重新绑定手机后初始化" : bound?.GetValue("Automatic") is int value && value == 1 ? (initializationFailed ? "此前自动配置仍保留；最近一次初始化失败，不能视为本次启用成功" : "自动提交已配置（不代表已成功解锁）") : "自动提交未配置或已停用";
                 binding = brokenBinding ? "手机地址缺失或被旧版诊断覆盖：请升级组件后重新绑定所选手机" : bound == null ? "当前账户未绑定：保留手动密码实验模式" : "当前账户已绑定：提交前必须通过手机验证";

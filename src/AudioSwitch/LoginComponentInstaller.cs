@@ -10,12 +10,17 @@ internal static class LoginComponentInstaller
 {
     internal static string HelperPath => Path.Combine(Environment.GetEnvironmentVariable("ProgramW6432") ?? Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "AudioSwitch Login Lab", "AudioSwitch.LoginBridge.exe");
     internal static string InstalledVersion => File.Exists(HelperPath) ? FileVersionInfo.GetVersionInfo(HelperPath).ProductVersion?.Trim() ?? "未知" : "未安装";
+    internal static string ProviderVersion
+    {
+        get { var path = Path.Combine(Path.GetDirectoryName(HelperPath)!, "AudioSwitch.LoginProvider.dll"); return File.Exists(path) ? FileVersionInfo.GetVersionInfo(path).ProductVersion?.Trim() ?? "未知" : "未安装"; }
+    }
+    internal static bool InstalledVersionsMatch => VersionMatches(InstalledVersion, UpdateService.CurrentTag) && VersionMatches(ProviderVersion, UpdateService.CurrentTag);
     internal static bool VersionMatches(string installed, string current) => string.Equals(installed, current, StringComparison.Ordinal);
     internal static void RequireCurrentVersion()
     {
         var installed = InstalledVersion;
-        if (!VersionMatches(installed, UpdateService.CurrentTag))
-            throw new InvalidOperationException($"主程序：{UpdateService.CurrentTag}\n磁盘上的登录组件：{installed}\n\n组件版本不匹配。请点击“下载并安装组件”，安装完成后按提示重启，再运行检测。无需重新初始化账户密码。");
+        if (!InstalledVersionsMatch)
+            throw new InvalidOperationException($"主程序：{UpdateService.CurrentTag}\n磁盘辅助工具：{installed}\n磁盘登录 DLL：{ProviderVersion}\n\n组件版本不匹配。请点击“下载并安装组件”，安装完成后按提示重启，再运行检测。无需重新初始化账户密码。");
     }
     internal static (Uri Url, string Digest) SelectAsset(JsonElement release, string repository, string tag, string runtime)
     {
@@ -83,8 +88,8 @@ internal static class LoginComponentInstaller
             if (owner.IsDisposed || closing.IsCancellationRequested) return false;
             if (installer.ExitCode == 2) { AppDialog.Show(owner, "已取消组件安装。", "安装已取消"); return false; }
             if (installer.ExitCode != 0) throw new InvalidOperationException($"安装向导未完成（退出码 {installer.ExitCode}）。请重试；系统 Hello / PIN 仍可使用。");
-            if (!VersionMatches(InstalledVersion, UpdateService.CurrentTag))
-                throw new InvalidOperationException($"安装向导已退出，但磁盘上的组件版本仍是 {InstalledVersion}，预期 {UpdateService.CurrentTag}。请先按安装向导要求重启，再检查组件状态；暂不视为升级完成。");
+            if (!InstalledVersionsMatch)
+                throw new InvalidOperationException($"安装向导已退出，但磁盘辅助工具为 {InstalledVersion}，登录 DLL 为 {ProviderVersion}，预期 {UpdateService.CurrentTag}。请先按安装向导要求重启，再检查组件状态；暂不视为升级完成。");
             AppDialog.Show(owner, "登录组件安装完成。若安装向导要求重启，请先重启电脑。\n\n安装不会自动启用解锁；绑定和本机初始化需单独操作。", "组件安装完成");
             return true;
         }
