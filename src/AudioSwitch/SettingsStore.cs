@@ -31,7 +31,10 @@ internal static class SettingsStore
     {
         string path = Path.Combine(Path.GetDirectoryName(resultPath)!, "settings-roundtrip.json");
         var first = new Settings("test-headphones", "test-speakers");
-        var second = new Settings("second-headphones", "test-speakers", 7, Keys.F10, false, "DISPLAY2");
+        var second = new Settings("second-headphones", "test-speakers", 7, Keys.F10, false, "DISPLAY2", false);
+        File.WriteAllText(path, """{"Headphones":"legacy-h","Speakers":"legacy-s"}""");
+        if (Read(path)?.ShowSwitchNotifications != true)
+            throw new InvalidOperationException("Older settings did not keep switch notifications enabled.");
         Write(path, first);
         if (Read(path) != first) throw new InvalidOperationException("Initial settings roundtrip failed.");
         Write(path, second);
@@ -49,9 +52,17 @@ internal static class SettingsStore
         Application.DoEvents();
         if (!reopened) throw new InvalidOperationException("Opening existing settings failed.");
         Settings? saved = null;
-        using (var form = new SettingsForm([], second, (candidate, _) => { saved = candidate; return null; }))
+        int switchRequests = 0;
+        using (var form = new SettingsForm([], second, (candidate, _) => { saved = candidate; return null; }, switchOutput: () => switchRequests++))
         {
             form.Show();
+            Descendants(form).OfType<ThemeButton>().First(c => c.Text == "立即切换").PerformClick();
+            if (switchRequests != 1) throw new InvalidOperationException("Settings switch action was not invoked.");
+            var notificationToggle = Descendants(form).OfType<Toggle>().First(c => c.Text == "显示切换提示");
+            if (notificationToggle.Checked) throw new InvalidOperationException("Disabled switch notifications were not restored.");
+            notificationToggle.Checked = true;
+            if (!form.HasUnsavedChanges) throw new InvalidOperationException("Notification preference change was not detected.");
+            notificationToggle.Checked = false;
             form.UpdateDevices([new OutputDevice(second.Headphones, "Reconnected headphones")], second.Headphones);
             if (form.HasUnsavedChanges) throw new InvalidOperationException("Connection refresh incorrectly marked settings as modified.");
             var toggle = Descendants(form).OfType<Toggle>().First(c => c.Text == "启动时检查新版本");

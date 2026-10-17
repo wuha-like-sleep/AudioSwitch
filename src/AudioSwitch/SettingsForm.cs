@@ -17,12 +17,13 @@ internal sealed class SettingsForm : ChromeForm
     private readonly Label shortcutHelp = new() { Dock = DockStyle.Fill, ForeColor = Theme.Muted, Padding = new Padding(0, 8, 0, 0) };
     private Draft? original;
     internal bool HasUnsavedChanges => original != null && CurrentDraft() != original;
+    private readonly Toggle showToast = new() { Text = "显示切换提示", Height = 28, Margin = Padding.Empty };
     private uint modifiers;
     private Keys hotkey;
     public Settings? Selection { get; private set; }
     public bool StartWithWindows => startup.Checked;
 
-    public SettingsForm(List<OutputDevice> devices, Settings? settings, Func<Settings, bool, string?>? saveSettings = null, Func<Task>? checkUpdates = null)
+    public SettingsForm(List<OutputDevice> devices, Settings? settings, Func<Settings, bool, string?>? saveSettings = null, Func<Task>? checkUpdates = null, Action? switchOutput = null)
     {
         Text = "AudioSwitch · 设置";
         Icon = BrandIcon.Load();
@@ -44,6 +45,7 @@ internal sealed class SettingsForm : ChromeForm
         modifiers = settings?.HotkeyModifiers ?? 3; hotkey = settings?.HotkeyKey ?? Keys.F11;
         startup.Checked = StartupService.Enabled;
         autoUpdate.Checked = settings?.AutoCheckUpdates ?? true;
+        showToast.Checked = settings?.ShowSwitchNotifications ?? true;
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 6, Padding = new Padding(28), AutoScroll = true };
         root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
@@ -84,11 +86,19 @@ internal sealed class SettingsForm : ChromeForm
         hero.Controls.Add(author, 2, 0);
         hero.SetRowSpan(author, 2);
         root.Controls.Add(hero, 0, 0);
-        var deviceHeading = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Margin = Padding.Empty };
+        var deviceHeading = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, Margin = Padding.Empty };
         deviceHeading.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
         deviceHeading.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        deviceHeading.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 108));
         deviceHeading.Controls.Add(new Label { Text = "输出设备", Font = new Font(Font, FontStyle.Bold), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft }, 0, 0);
         deviceHeading.Controls.Add(outputStatus, 1, 0);
+        var switchNow = new ThemeButton { Text = "立即切换", Dock = DockStyle.Fill, Margin = new Padding(12, 6, 0, 6), Enabled = settings != null && switchOutput != null, AccessibleName = "立即切换已保存的耳机与音箱" };
+        switchNow.Click += (_, _) => switchOutput?.Invoke();
+        var hints = new ToolTip();
+        hints.SetToolTip(switchNow, "按已保存的设备配置切换；修改设备后请先保存。");
+        hints.SetToolTip(showToast, "关闭后仍会切换声音输出，但不显示成功提示；错误仍会提醒。");
+        FormClosed += (_, _) => hints.Dispose();
+        deviceHeading.Controls.Add(switchNow, 2, 0);
         root.Controls.Add(deviceHeading, 0, 1);
         var cards = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 2, Margin = Padding.Empty };
         cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50)); cards.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
@@ -99,7 +109,8 @@ internal sealed class SettingsForm : ChromeForm
         var options = new TableLayoutPanel { Dock = DockStyle.Fill, BackColor = Color.Transparent, Padding = Padding.Empty, ColumnCount = 2, RowCount = 4, Margin = Padding.Empty };
         options.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 45)); options.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
         options.RowStyles.Add(new RowStyle(SizeType.Absolute, 28)); options.RowStyles.Add(new RowStyle(SizeType.Absolute, 36)); options.RowStyles.Add(new RowStyle(SizeType.Absolute, 32)); options.RowStyles.Add(new RowStyle(SizeType.Absolute, 46));
-        options.Controls.Add(new Label { Text = "偏好设置", AutoSize = true, Font = new Font(Font, FontStyle.Bold) }, 0, 0); options.SetColumnSpan(options.GetControlFromPosition(0, 0)!, 2);
+        options.Controls.Add(new Label { Text = "偏好设置", AutoSize = true, Font = new Font(Font, FontStyle.Bold) }, 0, 0);
+        options.Controls.Add(showToast, 1, 0);
         options.Controls.Add(new Label { Text = "切换快捷键", AutoSize = true, Padding = new Padding(0, 6, 0, 0) }, 0, 1);
         var capture = new TextBox { ReadOnly = true, Dock = DockStyle.Top, BackColor = Color.FromArgb(240, 244, 255), ForeColor = Accent, BorderStyle = BorderStyle.FixedSingle, Text = HotkeyWindow.Describe(modifiers, hotkey), AccessibleName = "点击后按下新快捷键" };
         capture.KeyDown += (_, e) =>
@@ -184,7 +195,7 @@ internal sealed class SettingsForm : ChromeForm
             if (headphones.SelectedItem is not Choice h || speakers.SelectedItem is not Choice s)
             { AppDialog.Show(this, "请选择耳机和音箱。", "设备未选全"); return; }
             if (h.Id == s.Id) { AppDialog.Show(this, "耳机和音箱必须是两个不同的输出设备。", "设备重复"); return; }
-            var candidate = new Settings(h.Id, s.Id, modifiers, hotkey, autoUpdate.Checked, (toastMonitor.SelectedItem as Choice)?.Id ?? "");
+            var candidate = new Settings(h.Id, s.Id, modifiers, hotkey, autoUpdate.Checked, (toastMonitor.SelectedItem as Choice)?.Id ?? "", showToast.Checked);
             var error = saveSettings?.Invoke(candidate, StartWithWindows);
             if (error != null) { AppDialog.Show(this, error, "设置未保存"); return; }
             Selection = candidate; DialogResult = DialogResult.OK;
@@ -196,8 +207,8 @@ internal sealed class SettingsForm : ChromeForm
         shortcutHelp.ForeColor = invalid ? Color.FromArgb(185, 65, 65) : Muted;
     }
     private Draft CurrentDraft() => new((headphones.SelectedItem as Choice)?.Id, (speakers.SelectedItem as Choice)?.Id,
-        modifiers, hotkey, startup.Checked, autoUpdate.Checked, (toastMonitor.SelectedItem as Choice)?.Id ?? "");
-    private sealed record Draft(string? Headphones, string? Speakers, uint Modifiers, Keys Key, bool Startup, bool AutoUpdate, string Monitor);
+        modifiers, hotkey, startup.Checked, autoUpdate.Checked, (toastMonitor.SelectedItem as Choice)?.Id ?? "", showToast.Checked);
+    private sealed record Draft(string? Headphones, string? Speakers, uint Modifiers, Keys Key, bool Startup, bool AutoUpdate, string Monitor, bool ShowToast);
 
     private void FillMonitors(string preferred)
     {

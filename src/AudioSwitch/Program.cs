@@ -24,13 +24,20 @@ internal static class Program
         if (!first) { if (!args.Contains("--startup")) HotkeyWindow.OpenExistingSettings(); return; }
         if (args.Contains("--preview"))
         {
+            bool previewHeadphones = true;
+            SettingsForm? previewForm = null;
             using var preview = new SettingsForm(
                 [new("preview-headphones", "USB 耳机 · Headphones"), new("preview-speakers", "USB 音箱 · Speakers")],
                 new Settings("preview-headphones", "preview-speakers"), checkUpdates: () =>
                 {
                     AppDialog.Show($"当前版本 {UpdateService.CurrentTag} 已是最新版本。", "已经是最新版本");
                     return Task.CompletedTask;
+                }, switchOutput: () =>
+                {
+                    previewHeadphones = !previewHeadphones;
+                    previewForm?.UpdateDevices([new("preview-headphones", "USB 耳机 · Headphones"), new("preview-speakers", "USB 音箱 · Speakers")], previewHeadphones ? "preview-headphones" : "preview-speakers");
                 });
+            previewForm = preview;
             preview.UpdateDevices([new("preview-headphones", "USB 耳机 · Headphones"), new("preview-speakers", "USB 音箱 · Speakers")], "preview-headphones");
             preview.ShowDialog();
             return;
@@ -54,7 +61,7 @@ internal static class Program
     }
 }
 
-internal sealed record Settings(string Headphones, string Speakers, uint HotkeyModifiers = 3, Keys HotkeyKey = Keys.F11, bool AutoCheckUpdates = true, string ToastMonitor = "");
+internal sealed record Settings(string Headphones, string Speakers, uint HotkeyModifiers = 3, Keys HotkeyKey = Keys.F11, bool AutoCheckUpdates = true, string ToastMonitor = "", bool ShowSwitchNotifications = true);
 
 internal sealed class TrayContext : ApplicationContext
 {
@@ -85,7 +92,7 @@ internal sealed class TrayContext : ApplicationContext
             settings = SettingsStore.Read(configPath);
         }
         catch (Exception ex) { Notify("配置读取失败，请重新选择设备。" + ex.Message, true); }
-        hotkey = new HotkeyWindow(Switch, Configure);
+        hotkey = new HotkeyWindow(() => { if (!configuring) Switch(); }, Configure);
         hotkey.TryChange(settings?.HotkeyModifiers ?? 3, settings?.HotkeyKey ?? Keys.F11);
         switchItem = new ToolStripMenuItem("切换耳机 / 音箱", null, (_, _) => Switch());
         menu.Items.Add(outputItem);
@@ -136,7 +143,7 @@ internal sealed class TrayContext : ApplicationContext
         configuring = true;
         try
         {
-            using var form = new SettingsForm(AudioDevices.List(), settings, SaveSettings, () => updates.CheckAsync(false));
+            using var form = new SettingsForm(AudioDevices.List(), settings, SaveSettings, () => updates.CheckAsync(false), Switch);
             settingsForm = form;
             RefreshStatus();
             form.ShowDialog();
@@ -181,7 +188,6 @@ internal sealed class TrayContext : ApplicationContext
 
     private void Switch()
     {
-        if (configuring) return;
         if (settings == null) { Configure(); return; }
         try
         {
@@ -213,7 +219,8 @@ internal sealed class TrayContext : ApplicationContext
 
     private void ShowSwitchToast(string title, string name)
     {
-        toast?.Close(); toast?.Dispose();
+        toast?.Close(); toast?.Dispose(); toast = null;
+        if (settings?.ShowSwitchNotifications == false) return;
         toast = new SwitchToast(title, name, settings?.ToastMonitor ?? "");
         toast.Show();
     }
