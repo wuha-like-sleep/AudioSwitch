@@ -216,7 +216,9 @@ internal sealed class TrayContext : ApplicationContext
         pauseLock.Enabled = settings?.Proximity?.Enabled == true;
         if (configuring || sessionLocked || suspended || pauseLock.Checked || bluetooth.Error != null)
         {
-            proximityGuard.Reset(); lockCountdownNotified = false; lockStatus.Text = "离开锁屏：暂停"; return;
+            proximityGuard.Reset(); lockCountdownNotified = false;
+            lockStatus.Text = configuring ? "离开锁屏：设置窗口打开，监测暂停" : sessionLocked ? "离开锁屏：电脑已锁定" : suspended ? "离开锁屏：电脑休眠，监测暂停" : pauseLock.Checked ? "离开锁屏：已手动暂停" : "离开锁屏：" + bluetooth.Error;
+            return;
         }
         var phone = bluetooth.Snapshot().FirstOrDefault(p => p.Id == settings?.Proximity?.PhoneId);
         var state = proximityGuard.Evaluate(settings?.Proximity, phone, DateTimeOffset.UtcNow);

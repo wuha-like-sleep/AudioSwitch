@@ -15,7 +15,7 @@ internal sealed class ProximityGuard
         if (phone == null || phone.Id != settings.PhoneId || (phone.Connected == null && settings.Mode != "signal")) { Reset(); return new("手机状态不可用，暂停自动锁屏"); }
         bool fresh = phone.SignalAt is { } seen && now >= seen && now - seen <= TimeSpan.FromSeconds(20) && phone.Signal is >= -127 and < 0;
         bool signalMode = settings.Mode == "signal", combined = settings.Mode == "either";
-        if (signalMode && !fresh) { awaySince = null; return new("没有实时信号，暂停信号锁屏"); }
+        if (signalMode && !fresh) { awaySince = null; return new("没有实时信号，信号锁屏已暂停；需监测蓝牙关闭请选“断开或信号较弱”"); }
         int recoveryThreshold = settings.SignalThreshold + Math.Clamp(settings.SignalHysteresis, 1, 20);
         bool healthy = signalMode ? fresh && phone.Signal > recoveryThreshold : phone.Connected == true;
         if (healthy && (!combined || !fresh || phone.Signal > recoveryThreshold))

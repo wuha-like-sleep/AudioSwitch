@@ -298,6 +298,18 @@ internal static class SettingsStore
         guard.Evaluate(config, weak with { Connected = false, SignalAt = now.AddSeconds(1) }, now.AddSeconds(1));
         if (!guard.Evaluate(config, weak with { Connected = false, SignalAt = now.AddSeconds(16) }, now.AddSeconds(16)).ShouldLock)
             throw new InvalidOperationException("Fresh signal mode incorrectly required an active audio connection.");
+        foreach (var mode in new[] { "disconnect", "either" })
+        {
+            var removedGuard = new ProximityGuard(); var removedConfig = config with { Mode = mode, DelaySeconds = 15 };
+            removedGuard.Evaluate(removedConfig, connected, now);
+            var removed = BluetoothPresence.Disconnected(connected);
+            if (removed.Signal != null || removed.SignalAt != null || removedGuard.Evaluate(removedConfig, removed, now.AddSeconds(1)).Remaining != 15
+                || !removedGuard.Evaluate(removedConfig, removed, now.AddSeconds(16)).ShouldLock)
+                throw new InvalidOperationException("Removed Bluetooth endpoint did not preserve an armed departure countdown.");
+            var neverConnected = new ProximityGuard();
+            if (neverConnected.Evaluate(removedConfig, removed, now).Remaining != null || neverConnected.Evaluate(removedConfig, removed, now.AddMinutes(2)).ShouldLock)
+                throw new InvalidOperationException("An unarmed removed endpoint triggered locking.");
+        }
         guard.Reset(); guard.Evaluate(config, connected, now);
         if (guard.Evaluate(config, null, now.AddSeconds(1)).ShouldLock) throw new InvalidOperationException("Missing device status triggered lock.");
         if (guard.Evaluate(config with { Enabled = false }, disconnected, now.AddSeconds(90)).ShouldLock) throw new InvalidOperationException("Disabled proximity triggered lock.");

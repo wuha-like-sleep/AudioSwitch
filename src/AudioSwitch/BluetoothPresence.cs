@@ -43,7 +43,13 @@ internal sealed class BluetoothPresence : IDisposable
             phones[update.Id] = phone;
         }
     }
-    private void Removed(DeviceWatcher sender, DeviceInformationUpdate update) { lock (gate) phones.Remove(update.Id); }
+    internal static PhoneSnapshot Disconnected(PhoneSnapshot phone) => phone with { Connected = false, Signal = null, SignalAt = null };
+    private void Removed(DeviceWatcher sender, DeviceInformationUpdate update)
+    {
+        // Preserve a known endpoint as disconnected. Deleting it would erase an
+        // armed departure countdown by turning an explicit removal into unknown.
+        lock (gate) if (phones.TryGetValue(update.Id, out var phone)) phones[update.Id] = Disconnected(phone);
+    }
     private void Stopped(DeviceWatcher sender, object args) { if (sender.Status == DeviceWatcherStatus.Aborted) Error = "蓝牙监测已中断，请重启应用后重试。"; }
     public void Dispose()
     {
