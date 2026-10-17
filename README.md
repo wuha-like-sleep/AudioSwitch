@@ -10,7 +10,7 @@
 一个快捷键，循环切换 USB、蓝牙、HDMI 等输出设备。
 
 [![Windows](https://img.shields.io/badge/Windows-10%20%7C%2011-465CE8?logo=windows&logoColor=white)](#安装)
-[![Release](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-v0.3.2--preview.1-465CE8)](https://github.com/wuha-like-sleep/AudioSwitch/releases)
+[![Release](https://img.shields.io/badge/%E4%B8%8B%E8%BD%BD-v0.3.3--preview.1-465CE8)](https://github.com/wuha-like-sleep/AudioSwitch/releases)
 [![Build](https://github.com/wuha-like-sleep/AudioSwitch/actions/workflows/build.yml/badge.svg)](https://github.com/wuha-like-sleep/AudioSwitch/actions/workflows/build.yml)
 [![License](https://img.shields.io/badge/License-MIT-22A77A)](LICENSE)
 
@@ -22,7 +22,7 @@
 
 <br />
 
-![AudioSwitch 设置界面](docs/images/settings-0.3.2-preview1.png)
+![AudioSwitch 设置界面](docs/images/settings-0.3.3-preview1.png)
 
 <div align="center"><sub>Windows 实际运行截图 · 展示使用示例设备</sub></div>
 
@@ -33,33 +33,39 @@
 
 **管理输出设备**
 
-![多设备循环列表](docs/images/devices-0.3.2-preview1.png)
+![多设备循环列表](docs/images/devices-0.3.3-preview1.png)
 
 **手机离开锁屏**
 
-![蓝牙手机锁屏设置](docs/images/proximity-0.3.2-preview1.png)
+![蓝牙手机锁屏设置](docs/images/proximity-0.3.3-preview1.png)
 
 <sub>手机状态为界面演示数据，真实连接和锁屏需在配对手机上验证。</sub>
 
+**解锁链路研究检测**
+
+![解锁链路检测界面](docs/images/unlock-0.3.3-preview1.png)
+
+<sub>手动检测加密蓝牙连接，尚未实现 Windows 自动解锁；截图不代表真实 iPhone 检测通过。</sub>
+
 **更新下载**
 
-![更新下载界面](docs/images/update-0.3.2-preview1.png)
+![更新下载界面](docs/images/update-0.3.3-preview1.png)
 
 **版本检查结果**
 
-![版本提示界面](docs/images/dialog-0.3.2-preview1.png)
+![版本提示界面](docs/images/dialog-0.3.3-preview1.png)
 
 **提示样式**
 
-![提示位置与停留时间](docs/images/style-0.3.2-preview1.png)
+![提示位置与停留时间](docs/images/style-0.3.3-preview1.png)
 
 **切换提示**
 
-![切换提示](docs/images/toast-0.3.2-preview1.png)
+![切换提示](docs/images/toast-0.3.3-preview1.png)
 
 **安装向导**
 
-![安装向导](docs/images/installer-0.3.2-preview1.png)
+![安装向导](docs/images/installer-0.3.3-preview1.png)
 
 </details>
 
@@ -79,9 +85,9 @@
 
 | 你的电脑 | 下载 |
 | :--- | :--- |
-| Intel / AMD 64 位电脑 · 大多数用户选择此项 | **[Windows x64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.2-preview.1/AudioSwitch-Setup-win-x64.exe)** |
-| Windows ARM64 电脑 | [Windows ARM64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.2-preview.1/AudioSwitch-Setup-win-arm64.exe) |
-| Windows 10 32 位电脑 | [Windows x86](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.2-preview.1/AudioSwitch-Setup-win-x86.exe) |
+| Intel / AMD 64 位电脑 · 大多数用户选择此项 | **[Windows x64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.3-preview.1/AudioSwitch-Setup-win-x64.exe)** |
+| Windows ARM64 电脑 | [Windows ARM64](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.3-preview.1/AudioSwitch-Setup-win-arm64.exe) |
+| Windows 10 32 位电脑 | [Windows x86](https://github.com/wuha-like-sleep/AudioSwitch/releases/download/v0.3.3-preview.1/AudioSwitch-Setup-win-x86.exe) |
 
 运行安装向导，选择安装位置、自启动和桌面快捷方式。程序默认安装到当前用户目录，安装完成后从开始菜单打开 **AudioSwitch**。
 
@@ -113,7 +119,7 @@
 
 启动、解锁或休眠恢复后需先检测到手机可用；瞬间断连不会立即锁屏，条件恢复会取消倒计时。设置编辑、休眠、已锁屏或监测异常期间暂停。只调用 Windows 锁屏，不自动解锁。信号值不等于精确距离；仅使用实时负值信号，过期或不可用时暂停信号判定，不能保证所有手机都支持。[Windows 信号属性说明](https://learn.microsoft.com/en-us/windows/win32/properties/props-system-devices-aep-signalstrength)
 
-**关于手机解锁。** 当前未实现自动解锁或手机确认解锁。返回电脑后请使用 Windows Hello、PIN 或密码；取消离开倒计时不会解除已经锁定的会话。仅 iPhone 蓝牙配对的解锁路线需要独立 Windows 登录认证组件及真机验证。
+**关于手机解锁。** 当前未实现自动解锁或手机确认解锁。返回电脑后请使用 Windows Hello、PIN 或密码；取消离开倒计时不会解除已经锁定的会话。手机锁屏设置中的“解锁检测”可手动尝试建立要求认证的加密蓝牙链路，并显示结果、超时或错误；无需手机 App，不输入密码或 PIN。通过只代表蓝牙链路，不能解锁。仅 iPhone 蓝牙配对的解锁路线仍缺少已验证的账户认证方式、独立 Windows 登录组件及真机验证。[研究进展](docs/DEVELOPMENT.md)
 
 **关于诊断。** 设置页的“诊断信息”可复制软件版本、系统架构、快捷键注册和音频设备状态，便于反馈问题。不会上传信息；分享前请检查设备名称。
 
