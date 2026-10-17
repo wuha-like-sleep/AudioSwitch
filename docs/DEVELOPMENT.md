@@ -141,3 +141,5 @@ CI 检查虚构记录的 DPAPI 往返、密文不含测试密码、受限令牌�
 为已授权请求记录初始化、手机认证和单次证明结果；原生登录组件记录自动凭据提交及 Windows ReportResult 主状态 / 子状态。记录不含密码、邮箱、地址、nonce 或序列化凭据，不参与授权决策。设置窗口显示阶段和时间，支持复制诊断。初始化常见错误提供处理说明，登录失败显示状态码并保留 Hello / PIN。
 
 [真机验收步骤](UNLOCK-VALIDATION.md)。没有真实 iPhone / 微软账户测试机，不能把 CI 通过称为端到端解锁成功。
+
+修正磁贴 SetSelected 始终返回 FALSE 的行为：仅 AutomaticReady 的短时许可有效且没有手动编辑时请求自动提交，与 GetCredentialCount 条件一致。[Microsoft SetSelected 文档](https://learn.microsoft.com/en-us/windows/win32/api/credentialprovider/nf-credentialprovider-icredentialprovidercredential-setselected) 明确系统仍可能展示登录按钮，不能承诺任何系统策略下都无需确认。

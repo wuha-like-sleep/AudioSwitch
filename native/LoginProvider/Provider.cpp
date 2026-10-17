@@ -78,7 +78,7 @@ public:
     IFACEMETHODIMP_(ULONG) Release() override { const auto n = InterlockedDecrement(&refs); if (!n) delete this; return n; }
     IFACEMETHODIMP Advise(ICredentialProviderCredentialEvents* value) override { events = value; return S_OK; }
     IFACEMETHODIMP UnAdvise() override { events.Reset(); return S_OK; }
-    IFACEMETHODIMP SetSelected(BOOL* automatic) override { if (!automatic) return E_POINTER; *automatic = FALSE; return S_OK; }
+    IFACEMETHODIMP SetSelected(BOOL* automatic) override { if (!automatic) return E_POINTER; *automatic = AutomaticReady() ? TRUE : FALSE; return S_OK; }
     IFACEMETHODIMP SetDeselected() override {
         password.Clear(); manualEditing = false;
         if (events) events->SetFieldString(this, PasswordField, L"");
