@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <cstdint>
 #include <cstring>
+#include <cwchar>
 namespace Bridge {
 inline constexpr wchar_t ServiceName[] = L"AudioSwitchLoginBridge";
 inline constexpr wchar_t PipeName[] = L"\\\\.\\pipe\\AudioSwitch.LoginBridge.v1";
@@ -13,7 +14,7 @@ struct Response { uint32_t magic = Magic, version = Version, size = sizeof(Respo
 static_assert(sizeof(Request) == 416 && sizeof(Response) == 72, "Fixed IPC layout across supported architectures");
 inline bool ValidRequest(const Request& request) {
     BYTE aggregate = 0; for (auto value : request.nonce) aggregate |= value;
-    return request.magic == Magic && request.version == Version && request.size == sizeof(Request) && aggregate && request.sid[0] && wmemchr(request.sid, 0, _countof(request.sid)) && request.session != 0;
+    return request.magic == Magic && request.version == Version && request.size == sizeof(Request) && aggregate && request.sid[0] && wmemchr(request.sid, 0, sizeof(request.sid) / sizeof(request.sid[0])) && request.session != 0;
 }
 inline bool ValidResponse(const Request& request, const Response& response, uint64_t phone, uint64_t now) {
     return ValidRequest(request) && response.magic == Magic && response.version == Version && response.size == sizeof(Response) && response.result == Result::Verified && response.reserved == 0 && response.session == request.session && response.phone == phone && phone && !memcmp(request.nonce, response.nonce, sizeof(request.nonce)) && response.completed <= now && now - response.completed <= 2000;
