@@ -153,3 +153,13 @@ CI 检查虚构记录的 DPAPI 往返、密文不含测试密码、受限令牌�
 修复已识别蓝牙端点 Removed 时被删除记录、导致离开计时复位的问题。现在保留断开状态并清空过期信号，只有此前已确认在附近的手机才会触发倒计时；断开模式与组合模式添加回归检查。托盘显示设置窗口打开、手动暂停、休眠和蓝牙异常的具体暂停原因。纯信号模式缺失 RSSI 仍暂停，并提示改用组合模式监测蓝牙断开。
 
 0.3.8 Preview 1 发行代码：`2aa793a501bacd191c5a93c7b3a71047e5eae08c`。[Windows CI 39029965220](https://github.com/wuha-like-sleep/AudioSwitch/actions/runs/39029965220) 三架构构建及 x64 安装、组件、设置回归检查通过。用户真机反馈：关闭设置窗口后离开锁屏正常；重新连接后自动解锁仍失败，等待分阶段诊断。
+
+### 0.3.9：系统服务蓝牙路径诊断
+
+用户真机反馈：账户密码与当前 SID 初始化通过，但锁屏阶段记录 PhoneUnavailable，旧实现没有保留原因；用户态 WinRT 探测曾通过，不能据此推断 LocalSystem 连接结果。没有凭据提交或 Windows 认证结果记录，因此尚未确认端到端解锁成功。
+
+增加管理员桌面“检测系统服务”请求，只允许受保护目录中的提权辅助程序、当前会话用户 SID；服务使用同一配对检查和认证加密 RFCOMM 路径。此请求不读写凭据、不改变单次自动策略，不生成可供自动提交使用的许可。独立 ServiceProbe 诊断与锁屏 Phone 记录分开。
+
+记录适配器、配对、套接字、认证、加密、连接事件、connect、等待与对端校验阶段和原生错误。以 FD_CONNECT / WSAEnumNetworkEvents 保留异步连接失败码；8 秒超时与服务停止均明确返回。仅可达性失败可计入离开条件，认证与本机配置错误不能用于触发自动提交。IPC 升级为 v3；旧进程不会复用新协议，组件升级后可能需要重启使 LogonUI 载入新 DLL。没有降低认证或加密要求。
+
+依据：[Bluetooth connect](https://learn.microsoft.com/en-us/windows/win32/bluetooth/bluetooth-and-connect)、[WSAEventSelect](https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-wsaeventselect)。此版用于定位用户态成功、系统服务失败的差异，不宣称已修复真机解锁。

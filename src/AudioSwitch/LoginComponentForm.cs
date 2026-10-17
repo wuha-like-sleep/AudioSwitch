@@ -31,7 +31,7 @@ internal sealed class LoginComponentForm : ChromeForm
                 using var registry = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, Environment.Is64BitOperatingSystem ? RegistryView.Registry64 : RegistryView.Registry32);
                 using var key = registry.OpenSubKey(@"SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\Credential Providers\" + ProviderId);
                 using var bound = registry.OpenSubKey(@"SOFTWARE\AudioSwitch\LoginBridge\Bindings\" + userSid);
-                foreach (var stage in new[] { "Enrollment", "Phone", "Commit", "Submission", "WindowsResult" })
+                foreach (var stage in new[] { "Enrollment", "Phone", "ServiceProbe", "Commit", "Submission", "WindowsResult" })
                 {
                     if (bound?.GetValue(stage) is not byte[] data || data.Length != 24 || BitConverter.ToUInt32(data, 0) != 1) continue;
                     var result = BitConverter.ToUInt32(data, 4); var error = BitConverter.ToUInt32(data, 8); var substatus = BitConverter.ToUInt32(data, 12);
@@ -40,12 +40,14 @@ internal sealed class LoginComponentForm : ChromeForm
                     var state = stage switch
                     {
                         "Enrollment" => result == 6 ? "账户密码及 SID 验证通过，已保存" : "初始化失败：" + ExplainError(error),
-                        "Phone" => error != 0 ? ExplainError(error) : result switch { 1 => "认证链路通过", 3 => "手机认证链路不可用：检查蓝牙、配对及 iPhone 免提服务", 5 => "手机已连接，等待锁屏后至少 12 秒的离开再返回", 7 => "本次锁屏已经尝试，等待重新锁屏", 4 => "会话或绑定发生变化，已停止", 2 => "未找到有效手机绑定", _ => "自动提交未启用或请求被拒绝" },
+                        "Phone" or "ServiceProbe" when error != 0 => (stage == "ServiceProbe" ? "系统服务检测：" : "锁屏手机认证：") + PhoneFailure(error, substatus),
+                        "ServiceProbe" => result == 1 ? "系统服务检测：认证加密链路通过（未提交凭据）" : "系统服务检测未通过，请确认同版本组件、绑定和服务状态",
+                        "Phone" => result switch { 1 => "认证链路通过", 3 => "手机认证链路不可用：检查蓝牙、配对及 iPhone 免提服务", 5 => "手机已连接，等待锁屏后至少 12 秒的离开再返回", 7 => "本次锁屏已经尝试，等待重新锁屏", 4 => "会话或绑定发生变化，已停止", 2 => "未找到有效手机绑定", _ => "自动提交未启用或请求被拒绝" },
                         "Commit" => result == 1 ? "单次手机证明已消费" : "手机证明过期、会话变化或已使用，未允许提交",
                         "Submission" => "凭据已交给 Windows；不代表认证或解锁成功",
                         _ => result == 1 ? "Windows 返回认证通过；仍需现场确认桌面解锁" : "Windows 拒绝认证，已撤销自动凭据"
                     };
-                    diagnostics += $"{time} · {state} [错误 0x{error:X8} / 子状态 0x{substatus:X8}]\r\n";
+                    diagnostics += $"{time} · {state} [错误 {error} / 0x{error:X8}；{(stage is "Phone" or "ServiceProbe" ? "蓝牙阶段" : "子状态")} 0x{substatus:X8}]\r\n";
                 }
                 registration = key == null ? "未注册实验组件" : "已注册实验组件";
                 automatic = bound?.GetValue("Automatic") is int value && value == 1 ? "自动提交已配置（不代表已成功解锁）" : "自动提交未配置或已停用";
@@ -101,7 +103,7 @@ internal sealed class LoginComponentForm : ChromeForm
         var copy = Button("复制诊断", false); copy.Width = 105; copy.Click += (_, _) => { RefreshReport(); try { Clipboard.SetText(report.Text); } catch (Exception ex) { AppDialog.Show(this, ex.Message, "无法复制诊断"); } };
         actions.Controls.AddRange([bind, unbind, refresh, copy]); root.Controls.Add(actions, 0, 3);
         var autoActions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false };
-        var initialize = Button("初始化并启用", true); var revoke = Button("停用并清除", false);
+        var initialize = Button("初始化并启用", true); var revoke = Button("停用并清除", false); var probe = Button("检测系统服务", false);
         async Task ConfigureAutomatic(bool clear)
         {
             initialize.Enabled = revoke.Enabled = false;
@@ -123,7 +125,7 @@ internal sealed class LoginComponentForm : ChromeForm
             finally { if (!IsDisposed) initialize.Enabled = revoke.Enabled = true; }
         }
         initialize.Click += async (_, _) => await ConfigureAutomatic(false); revoke.Click += async (_, _) => await ConfigureAutomatic(true);
-        autoActions.Controls.AddRange([initialize, revoke]); root.Controls.Add(autoActions, 0, 4);
+        autoActions.Controls.AddRange([initialize, revoke, probe]); root.Controls.Add(autoActions, 0, 4);
         var footer = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.RightToLeft, WrapContents = false };
         var close = Button("关闭", false); close.Click += (_, _) => Close();
         var closing = new CancellationTokenSource();
@@ -131,13 +133,39 @@ internal sealed class LoginComponentForm : ChromeForm
         var download = Button("下载并安装组件", true);
         download.Click += async (_, _) =>
         {
-            download.Enabled = bind.Enabled = unbind.Enabled = initialize.Enabled = revoke.Enabled = false;
+            download.Enabled = probe.Enabled = bind.Enabled = unbind.Enabled = initialize.Enabled = revoke.Enabled = false;
             try { await LoginComponentInstaller.InstallAsync(this, closing.Token); if (!IsDisposed) RefreshReport(); }
-            finally { if (!IsDisposed) { download.Enabled = unbind.Enabled = initialize.Enabled = revoke.Enabled = true; bind.Enabled = phoneId.Length > 0; } }
+            finally { if (!IsDisposed) { download.Enabled = probe.Enabled = unbind.Enabled = initialize.Enabled = revoke.Enabled = true; bind.Enabled = phoneId.Length > 0; } }
+        };
+        probe.Click += async (_, _) =>
+        {
+            probe.Enabled = download.Enabled = bind.Enabled = unbind.Enabled = initialize.Enabled = revoke.Enabled = false;
+            probe.Text = "正在检测…";
+            try
+            {
+                var programFiles = Environment.GetEnvironmentVariable("ProgramW6432") ?? Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+                var helper = Path.Combine(programFiles, "AudioSwitch Login Lab", "AudioSwitch.LoginBridge.exe");
+                if (!File.Exists(helper)) throw new InvalidOperationException("请先点击“下载并安装组件”，安装同版本 LoginLab。");
+                var start = new ProcessStartInfo(helper) { UseShellExecute = true, Verb = "runas", WindowStyle = ProcessWindowStyle.Hidden };
+                start.ArgumentList.Add("--probe-service"); start.ArgumentList.Add(userSid);
+                using var process = Process.Start(start) ?? throw new InvalidOperationException("无法启动检测工具。");
+                await process.WaitForExitAsync(); if (IsDisposed) return;
+                RefreshReport();
+                if (process.ExitCode != 0) throw new System.ComponentModel.Win32Exception(process.ExitCode);
+                AppDialog.Show(this, "系统服务已建立要求认证和加密的蓝牙连接。未保存密码、未启用自动提交、未解锁。请复制诊断核对本次结果。", "服务链路检测通过");
+            }
+            catch (Exception ex) { if (!IsDisposed) { RefreshReport(); AppDialog.Show(this, ex.Message + "\n\n请复制诊断中的“系统服务检测”或蓝牙阶段记录。若没有新记录，请重新安装同版本组件并按要求重启。", "服务链路检测未完成"); } }
+            finally { if (!IsDisposed) { probe.Text = "检测系统服务"; probe.Enabled = download.Enabled = unbind.Enabled = initialize.Enabled = revoke.Enabled = true; bind.Enabled = phoneId.Length > 0; } }
         };
         var options = Button("系统登录选项", false); options.Click += (_, _) => Open("ms-settings:signinoptions");
         footer.Controls.AddRange([close, download, options]); root.Controls.Add(footer, 0, 5); Controls.Add(root); root.BringToFront();
         CancelButton = close; Shown += (_, _) => { report.Select(0, 0); close.Focus(); };
+    }
+    internal static string PhoneFailure(uint error, uint phase)
+    {
+        var step = phase switch { 1 => "服务无法访问蓝牙适配器", 2 => "服务未找到此手机的已认证配对记录", 3 => "创建蓝牙套接字失败", 4 => "要求蓝牙认证失败", 5 => "要求蓝牙加密失败", 6 => "设置连接事件失败", 7 => "连接免提服务失败", 8 => "等待免提服务连接失败", 9 => "连接对端校验失败", 10 => "服务停止，检测已取消", _ => "系统服务蓝牙验证失败" };
+        var detail = error switch { 10013 => "系统拒绝访问或蓝牙认证失败", 10060 => "连接超时，手机可能未响应", 10048 => "通道被占用", 10064 => "手机拒绝连接或服务不可用", 10022 => "驱动、即插即用或参数错误", 1062 => "桥接服务不可用或版本不匹配", _ => new System.ComponentModel.Win32Exception(unchecked((int)error)).Message };
+        return $"{step}：{detail}";
     }
     private static string ExplainError(uint error) => error switch
     {

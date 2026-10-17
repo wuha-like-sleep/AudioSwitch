@@ -38,9 +38,12 @@ DWORD WINAPI Control(DWORD command, DWORD event, void* data, void*) {
     if (command == SERVICE_CONTROL_STOP || command == SERVICE_CONTROL_SHUTDOWN) { Status(SERVICE_STOP_PENDING); SetEvent(stopEvent); }
     return NO_ERROR;
 }
-bool Paired(uint64_t address) {
+bool Paired(uint64_t address, DWORD* error = nullptr, Bridge::PhoneStage* stage = nullptr) {
+    if (stage) *stage = Bridge::PhoneStage::Adapter;
     BLUETOOTH_FIND_RADIO_PARAMS parameters{sizeof(parameters)}; HANDLE radio = nullptr;
-    auto find = BluetoothFindFirstRadio(&parameters, &radio); if (!find) return false;
+    auto find = BluetoothFindFirstRadio(&parameters, &radio);
+    if (!find) { if (error) { *error = GetLastError(); if (!*error) *error = ERROR_NOT_READY; } return false; }
+    if (stage) *stage = Bridge::PhoneStage::Pairing;
     bool paired = false;
     do {
         BLUETOOTH_DEVICE_INFO device{}; device.dwSize = sizeof(device); device.Address.ullLong = address;
@@ -48,38 +51,60 @@ bool Paired(uint64_t address) {
         CloseHandle(radio); radio = nullptr;
         if (paired) break;
     } while (BluetoothFindNextRadio(find, &radio));
-    BluetoothFindRadioClose(find); return paired;
+    BluetoothFindRadioClose(find);
+    if (error) *error = paired ? ERROR_SUCCESS : ERROR_NOT_FOUND;
+    return paired;
 }
-bool VerifyPhone(uint64_t address) {
-    if (!address || !Paired(address) || WaitForSingleObject(stopEvent, 0) == WAIT_OBJECT_0) return false;
-    auto socket = ::socket(AF_BTH, SOCK_STREAM, BTHPROTO_RFCOMM); if (socket == INVALID_SOCKET) return false;
-    ULONG required = TRUE;
-    bool valid = setsockopt(socket, SOL_RFCOMM, SO_BTH_AUTHENTICATE, reinterpret_cast<const char*>(&required), sizeof(required)) == 0 && setsockopt(socket, SOL_RFCOMM, SO_BTH_ENCRYPT, reinterpret_cast<const char*>(&required), sizeof(required)) == 0;
-    u_long nonblocking = 1;
-    valid = valid && ioctlsocket(socket, FIONBIO, &nonblocking) == 0;
-    SOCKADDR_BTH endpoint{}; endpoint.addressFamily = AF_BTH; endpoint.btAddr = address;
-    endpoint.serviceClassId = {0x0000111f, 0x0000, 0x1000, {0x80, 0, 0, 0x80, 0x5f, 0x9b, 0x34, 0xfb}};
-    if (valid) {
-        const int connected = connect(socket, reinterpret_cast<SOCKADDR*>(&endpoint), sizeof(endpoint));
-        if (connected != 0) {
-            const int error = WSAGetLastError(); valid = error == WSAEWOULDBLOCK || error == WSAEINPROGRESS;
-            const auto deadline = GetTickCount64() + 8000;
-            bool complete = false;
-            while (valid && GetTickCount64() < deadline && WaitForSingleObject(stopEvent, 0) != WAIT_OBJECT_0) {
-                fd_set writes, errors; FD_ZERO(&writes); FD_ZERO(&errors); FD_SET(socket, &writes); FD_SET(socket, &errors); timeval timeout{0, 100000};
-                const int selected = select(0, nullptr, &writes, &errors, &timeout);
-                if (selected < 0) { valid = false; break; }
-                if (selected > 0) { complete = FD_ISSET(socket, &writes) && !FD_ISSET(socket, &errors); break; }
-            }
-            valid = valid && complete;
+struct PhoneCheck { bool known = false, verified = false; DWORD error = 0; Bridge::PhoneStage stage = Bridge::PhoneStage::None; };
+PhoneCheck VerifyPhone(uint64_t address) {
+    PhoneCheck check;
+    check.known = Paired(address, &check.error, &check.stage);
+    if (!check.known) return check;
+    if (WaitForSingleObject(stopEvent, 0) == WAIT_OBJECT_0) { check.error = ERROR_CANCELLED; check.stage = Bridge::PhoneStage::Cancelled; return check; }
+    check.stage = Bridge::PhoneStage::Socket;
+    auto socket = ::socket(AF_BTH, SOCK_STREAM, BTHPROTO_RFCOMM);
+    if (socket == INVALID_SOCKET) { check.error = WSAGetLastError(); return check; }
+    WSAEVENT event = WSA_INVALID_EVENT;
+    auto connectPhone = [&]() -> bool {
+        ULONG required = TRUE;
+        check.stage = Bridge::PhoneStage::Authentication;
+        if (setsockopt(socket, SOL_RFCOMM, SO_BTH_AUTHENTICATE, reinterpret_cast<const char*>(&required), sizeof(required)) != 0) { check.error = WSAGetLastError(); return false; }
+        check.stage = Bridge::PhoneStage::Encryption;
+        if (setsockopt(socket, SOL_RFCOMM, SO_BTH_ENCRYPT, reinterpret_cast<const char*>(&required), sizeof(required)) != 0) { check.error = WSAGetLastError(); return false; }
+        check.stage = Bridge::PhoneStage::Events;
+        event = WSACreateEvent();
+        if (event == WSA_INVALID_EVENT || WSAEventSelect(socket, event, FD_CONNECT) != 0) { check.error = WSAGetLastError(); return false; }
+        SOCKADDR_BTH endpoint{}; endpoint.addressFamily = AF_BTH; endpoint.btAddr = address;
+        endpoint.serviceClassId = {0x0000111f, 0x0000, 0x1000, {0x80, 0, 0, 0x80, 0x5f, 0x9b, 0x34, 0xfb}};
+        check.stage = Bridge::PhoneStage::Connect;
+        if (connect(socket, reinterpret_cast<SOCKADDR*>(&endpoint), sizeof(endpoint)) != 0) {
+            check.error = WSAGetLastError();
+            if (check.error != WSAEWOULDBLOCK && check.error != WSAEINPROGRESS) return false;
+            check.stage = Bridge::PhoneStage::Wait;
+            HANDLE waits[] = {event, stopEvent};
+            const auto waited = WaitForMultipleObjects(2, waits, FALSE, 8000);
+            if (waited == WAIT_OBJECT_0 + 1) { check.error = ERROR_CANCELLED; check.stage = Bridge::PhoneStage::Cancelled; return false; }
+            if (waited == WAIT_TIMEOUT) { check.error = WSAETIMEDOUT; return false; }
+            if (waited != WAIT_OBJECT_0) { check.error = GetLastError(); return false; }
+            WSANETWORKEVENTS events{};
+            if (WSAEnumNetworkEvents(socket, event, &events) != 0) { check.error = WSAGetLastError(); return false; }
+            if (!(events.lNetworkEvents & FD_CONNECT)) { check.error = WSAEINVAL; return false; }
+            check.error = static_cast<DWORD>(events.iErrorCode[FD_CONNECT_BIT]);
+            if (check.error) return false;
         }
+        check.stage = Bridge::PhoneStage::Peer;
         SOCKADDR_BTH actual{}; int bytes = sizeof(actual);
-        valid = valid && getpeername(socket, reinterpret_cast<SOCKADDR*>(&actual), &bytes) == 0 && actual.addressFamily == AF_BTH && actual.btAddr == address;
-    }
-    closesocket(socket); return valid && WaitForSingleObject(stopEvent, 0) != WAIT_OBJECT_0;
+        if (getpeername(socket, reinterpret_cast<SOCKADDR*>(&actual), &bytes) != 0) { check.error = WSAGetLastError(); return false; }
+        if (actual.addressFamily != AF_BTH || actual.btAddr != address) { check.error = ERROR_INVALID_DATA; return false; }
+        if (WaitForSingleObject(stopEvent, 0) == WAIT_OBJECT_0) { check.error = ERROR_CANCELLED; check.stage = Bridge::PhoneStage::Cancelled; return false; }
+        check.error = 0; check.stage = Bridge::PhoneStage::None; return true;
+    };
+    check.verified = connectPhone();
+    closesocket(socket); if (event != WSA_INVALID_EVENT) WSACloseEvent(event);
+    return check;
 }
 bool IsLogonClient(HANDLE pipe, const Bridge::Request& request) {
-    const bool enrollment = request.intent == Bridge::Intent::Enroll;
+    const bool enrollment = request.intent == Bridge::Intent::Enroll || request.intent == Bridge::Intent::ServiceProbe;
     ULONG pid = 0; DWORD session = 0;
     if (!GetNamedPipeClientProcessId(pipe, &pid) || !ProcessIdToSessionId(pid, &session) || session != request.session) return false;
     auto process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid); if (!process) return false;
@@ -123,9 +148,10 @@ DWORD SaveEnrollment(const Bridge::Request& request, const BYTE* encrypted) {
 void VerifyRequest(HANDLE pipe, const Bridge::Request& request, Bridge::Response& response) {
     const auto epoch = InterlockedCompareExchange(&sessionEpoch, 0, 0);
     if (!IsLogonClient(pipe, request)) { response.result = Bridge::Result::SessionMismatch; return; }
-    struct Diagnostic { const Bridge::Request& request; const Bridge::Response& response;
-        ~Diagnostic() { LoginDiagnostics::Write(request.sid, request.intent == Bridge::Intent::Enroll ? L"Enrollment" : request.intent == Bridge::Intent::AutoCommit ? L"Commit" : L"Phone", static_cast<DWORD>(response.result), response.error); }
-    } diagnostic{request, response};
+    DWORD phoneStage = 0;
+    struct Diagnostic { const Bridge::Request& request; const Bridge::Response& response; const DWORD& phoneStage;
+        ~Diagnostic() { LoginDiagnostics::Write(request.sid, request.intent == Bridge::Intent::Enroll ? L"Enrollment" : request.intent == Bridge::Intent::AutoCommit ? L"Commit" : request.intent == Bridge::Intent::ServiceProbe ? L"ServiceProbe" : L"Phone", static_cast<DWORD>(response.result), response.error, phoneStage); }
+    } diagnostic{request, response, phoneStage};
     if (request.intent == Bridge::Intent::Enroll) {
         BYTE encrypted[16384]{};
         if (!Bridge::Transfer(pipe, encrypted, request.payloadBytes, false, stopEvent)) { response.error = ERROR_READ_FAULT; return; }
@@ -135,7 +161,7 @@ void VerifyRequest(HANDLE pipe, const Bridge::Request& request, Bridge::Response
     }
     uint64_t phone = 0;
     if (!Bridge::ReadBinding(request.sid, &phone) || !phone) { response.result = Bridge::Result::NotBound; return; }
-    const bool automatic = request.intent != Bridge::Intent::Manual;
+    const bool automatic = request.intent == Bridge::Intent::AutoProbe || request.intent == Bridge::Intent::AutoCommit;
     if (automatic && !Vault::Enabled(request.sid)) return;
     if (request.intent == Bridge::Intent::AutoCommit) {
         AcquireSRWLockExclusive(&policyLock); auto state = Policy(request.session);
@@ -149,12 +175,13 @@ void VerifyRequest(HANDLE pipe, const Bridge::Request& request, Bridge::Response
         if (attempted) { response.result = Bridge::Result::AlreadyTried; return; }
     }
     // No usable adapter / paired identity cannot arm an away-to-near transition.
-    const bool known = Paired(phone);
-    const bool present = known && VerifyPhone(phone);
+    const auto phoneCheck = VerifyPhone(phone);
+    response.error = phoneCheck.error; phoneStage = static_cast<DWORD>(phoneCheck.stage);
+    const bool present = phoneCheck.verified;
     uint64_t current = 0;
     if (epoch != InterlockedCompareExchange(&sessionEpoch, 0, 0) || !IsLogonClient(pipe, request) || !Bridge::ReadBinding(request.sid, &current) || current != phone) { response.result = Bridge::Result::SessionMismatch; return; }
     if (!present) {
-        if (automatic && known) { AcquireSRWLockExclusive(&policyLock); auto state = Policy(request.session); if (state) state->Absent(GetTickCount64()); ReleaseSRWLockExclusive(&policyLock); }
+        if (automatic && phoneCheck.known && Bridge::CanArmAbsence(phoneCheck.error, phoneCheck.stage)) { AcquireSRWLockExclusive(&policyLock); auto state = Policy(request.session); if (state) state->Absent(GetTickCount64()); ReleaseSRWLockExclusive(&policyLock); }
         response.result = Bridge::Result::PhoneUnavailable; return;
     }
     if (automatic) {
@@ -271,9 +298,10 @@ int Binding(int argc, wchar_t** argv) {
 }
 int wmain(int argc, wchar_t** argv) {
     if (argc == 2 && (wcscmp(argv[1], L"--install-service") == 0 || wcscmp(argv[1], L"--stop-service") == 0 || wcscmp(argv[1], L"--remove-service") == 0)) return ManageService(argv[1]);
-    if (argc == 3 && IsUserAnAdmin() && (wcscmp(argv[1], L"--enroll") == 0 || wcscmp(argv[1], L"--revoke") == 0)) {
+    if (argc == 3 && IsUserAnAdmin() && (wcscmp(argv[1], L"--enroll") == 0 || wcscmp(argv[1], L"--revoke") == 0 || wcscmp(argv[1], L"--probe-service") == 0)) {
         PSID sid = nullptr; if (wcslen(argv[2]) > 183 || !ConvertStringSidToSidW(argv[2], &sid)) return ERROR_INVALID_SID; LocalFree(sid);
         if (wcscmp(argv[1], L"--revoke") == 0) { Vault::Revoke(argv[2]); return 0; }
+        if (wcscmp(argv[1], L"--probe-service") == 0) return static_cast<int>(ProbeServicePhone(argv[2]));
         return static_cast<int>(EnrollLocalCredential(argv[2]));
     }
     if (argc > 1) return Binding(argc, argv);

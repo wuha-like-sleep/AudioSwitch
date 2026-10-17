@@ -45,6 +45,9 @@ try {
         Set-ItemProperty $binding -Name Automatic -Value 1
         & $test $registered '--deny-bound'
         if ($LASTEXITCODE -ne 0) { throw 'Broker allowed a non-LogonUI caller' }
+        & (Join-Path $install 'AudioSwitch.LoginBridge.exe') '--probe-service' 'S-1-5-21-100-200-300-1001'
+        if ($LASTEXITCODE -eq 0) { throw 'Desktop service probe accepted a different session user SID' }
+        if ((Get-ItemProperty $binding).Automatic -ne 1) { throw 'Service probe changed automatic enrollment' }
         Stop-Service 'AudioSwitchLoginBridge'
         & $test $registered '--deny-bound'
         if ($LASTEXITCODE -ne 0) { throw 'Missing broker did not fail closed' }

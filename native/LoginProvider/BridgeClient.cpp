@@ -78,3 +78,11 @@ DWORD EnrollLocalCredential(PCWSTR sid) {
     if (!exchanged) return ERROR_SERVICE_NOT_ACTIVE;
     return response.result == Bridge::Result::Enrolled && response.error == 0 ? ERROR_SUCCESS : response.error ? response.error : ERROR_ACCESS_DENIED;
 }
+
+DWORD ProbeServicePhone(PCWSTR sid) {
+    uint64_t phone = 0; if (!Bridge::ReadBinding(sid, &phone) || !phone) return ERROR_NOT_FOUND;
+    Bridge::Request request; request.intent = Bridge::Intent::ServiceProbe; wcsncpy_s(request.sid, sid, _TRUNCATE);
+    Bridge::Response response;
+    if (!Exchange(request, response, nullptr)) return ERROR_SERVICE_NOT_ACTIVE;
+    return Bridge::ValidResponse(request, response, phone, GetTickCount64()) ? ERROR_SUCCESS : response.error ? response.error : ERROR_ACCESS_DENIED;
+}

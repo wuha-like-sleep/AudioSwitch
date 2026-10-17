@@ -170,6 +170,8 @@ internal static class SettingsStore
                 if (!rejected) throw new InvalidOperationException("Mismatched component source/version/architecture was accepted.");
             }
         }
+        if (!LoginComponentForm.PhoneFailure(10060, 8).Contains("超时") || !LoginComponentForm.PhoneFailure(10013, 4).Contains("认证"))
+            throw new InvalidOperationException("Native service phone error explanation failed.");
         string diagnostic = Diagnostics.Build(second, true);
         if (!diagnostic.Contains(UpdateService.CurrentTag) || diagnostic.Contains(second.Headphones) || diagnostic.Contains(second.Speakers))
             throw new InvalidOperationException("Diagnostics version or device identifier privacy failed.");

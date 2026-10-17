@@ -5,3 +5,5 @@ bool VerifyBoundPhone(PCWSTR sid, HANDLE cancel = nullptr);
 bool ProbeAutomatic(PCWSTR sid, PhoneApproval& approval, HANDLE cancel);
 bool CommitAutomatic(PCWSTR sid, const PhoneApproval& approval);
 DWORD EnrollLocalCredential(PCWSTR sid);
+
+DWORD ProbeServicePhone(PCWSTR sid);
