@@ -46,6 +46,7 @@ internal sealed class ThemeButton : Button
         FlatStyle = FlatStyle.Flat; FlatAppearance.BorderSize = 0; BackColor = Color.Transparent;
         Cursor = Cursors.Hand;
     }
+    protected override void OnPaintBackground(PaintEventArgs e) => e.Graphics.Clear(Color.FromArgb(243, 246, 251));
     protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
     protected override void OnMouseLeave(EventArgs e) { hover = false; Invalidate(); base.OnMouseLeave(e); }
     protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
@@ -63,7 +64,8 @@ internal sealed class ThemeButton : Button
 }
 internal sealed class Toggle : CheckBox
 {
-    public Toggle() { AutoSize = false; Size = new Size(285, 32); Cursor = Cursors.Hand; SetStyle(ControlStyles.UserPaint | ControlStyles.OptimizedDoubleBuffer, true); }
+    public Toggle() { AutoSize = false; Size = new Size(285, 32); Cursor = Cursors.Hand; SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer, true); }
+    protected override void OnPaintBackground(PaintEventArgs e) => e.Graphics.Clear(Color.White);
     protected override void OnCheckedChanged(EventArgs e) { Invalidate(); base.OnCheckedChanged(e); }
     protected override void OnPaint(PaintEventArgs e)
     {
