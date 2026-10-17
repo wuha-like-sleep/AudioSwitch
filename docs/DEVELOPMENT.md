@@ -163,3 +163,5 @@ CI 检查虚构记录的 DPAPI 往返、密文不含测试密码、受限令牌�
 记录适配器、配对、套接字、认证、加密、连接事件、connect、等待与对端校验阶段和原生错误。以 FD_CONNECT / WSAEnumNetworkEvents 保留异步连接失败码；8 秒超时与服务停止均明确返回。仅可达性失败可计入离开条件，认证与本机配置错误不能用于触发自动提交。IPC 升级为 v3；旧进程不会复用新协议，组件升级后可能需要重启使 LogonUI 载入新 DLL。没有降低认证或加密要求。
 
 依据：[Bluetooth connect](https://learn.microsoft.com/en-us/windows/win32/bluetooth/bluetooth-and-connect)、[WSAEventSelect](https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-wsaeventselect)。此版用于定位用户态成功、系统服务失败的差异，不宣称已修复真机解锁。
+
+0.3.9 Preview 1 发行代码：`ba73bc4c3f0f43dfae912d1f7e00aadda5736ec1`。[Windows CI 39030502631](https://github.com/wuha-like-sleep/AudioSwitch/actions/runs/39030502631) 三架构构建，x64 安装、服务、受保护存储、协议、跨 SID 检测拒绝与错误解释检查通过。CI 没有真实 iPhone，系统服务连接失败原因仍待用户新诊断确认。
