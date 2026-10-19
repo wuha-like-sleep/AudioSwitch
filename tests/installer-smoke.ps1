@@ -18,7 +18,13 @@ $audioResult = Join-Path $PSScriptRoot '../artifacts/audio-interfaces.txt'
 $audioCheck = Start-Process $app -ArgumentList '--verify-audio', "`"$audioResult`"" -Wait -PassThru
 if ($audioCheck.ExitCode -ne 0) { throw (Get-Content $audioResult -Raw) }
 $settingsResult = Join-Path $PSScriptRoot '../artifacts/settings-checks.txt'
-$settingsCheck = Start-Process $app -ArgumentList '--verify-settings', "`"$settingsResult`"" -Wait -PassThru
+Write-Host 'Starting settings and dialog verification'
+$settingsCheck = Start-Process $app -ArgumentList '--verify-settings', "`"$settingsResult`"" -PassThru
+if (-not $settingsCheck.WaitForExit(60000)) {
+    if (Test-Path "$settingsResult.trace") { Get-Content "$settingsResult.trace" | Write-Host }
+    $settingsCheck.Kill($true)
+    throw 'Settings / dialog verification exceeded 60 seconds'
+}
 if ($settingsCheck.ExitCode -ne 0) { throw (Get-Content $settingsResult -Raw) }
 # Render the actual settings window with sample devices, independent of CI audio hardware.
 $preview = Start-Process $app -ArgumentList '--preview' -PassThru
@@ -69,6 +75,7 @@ public class WindowCapture {
     if (-not $preview.HasExited) { Stop-Process -Id $preview.Id; $preview.WaitForExit() }
 }
 function Save-Preview($Process, [string]$Name) {
+    Write-Host "Capturing $Name window"
     $windowHandle = [IntPtr]::Zero
     for ($attempt = 0; $attempt -lt 20; $attempt++) {
         Start-Sleep -Milliseconds 500

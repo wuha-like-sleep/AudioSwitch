@@ -29,6 +29,8 @@ internal static class SettingsStore
 
     public static void Verify(string resultPath)
     {
+        void Trace(string stage) => File.AppendAllText(resultPath + ".trace", stage + Environment.NewLine);
+        Trace("Settings verification started");
         string path = Path.Combine(Path.GetDirectoryName(resultPath)!, "settings-roundtrip.json");
         var first = new Settings("test-headphones", "test-speakers");
         var second = new Settings("second-headphones", "test-speakers", 7, Keys.F10, false, "DISPLAY2", false, "top-left", 3000);
@@ -76,7 +78,9 @@ internal static class SettingsStore
                     if (dialog != null) { dismiss.Stop(); dialog.AcceptButton!.PerformClick(); }
                 };
                 dismiss.Start();
+                Trace("Opening discard confirmation");
                 form.Close();
+                Trace("Discard confirmation returned");
             }
             if (form.IsDisposed || !form.Visible)
                 throw new InvalidOperationException("Default discard confirmation did not preserve the editing window.");
@@ -141,6 +145,7 @@ internal static class SettingsStore
             || SwitchTarget.Choose(first, first.Headphones, [first.Headphones]) != first.Headphones
             || SwitchTarget.Choose(first, null, []) != null)
             throw new InvalidOperationException("Connected device switch selection failed.");
+        Trace("Opening toast style verification");
         using (var style = new ToastStyleForm("", "top-left", 3000))
         {
             style.Show();
@@ -176,6 +181,7 @@ internal static class SettingsStore
             || LoginComponentInstaller.VersionMatches("0.3.8-preview.1", "0.3.10-preview.1")
             || LoginComponentInstaller.VersionMatches("未知", "0.3.10-preview.1"))
             throw new InvalidOperationException("Login component version mismatch was accepted.");
+        Trace("Opening owned window verification");
         using (var parentWindow = new Form())
         using (var childWindow = new Form())
         {
@@ -221,6 +227,7 @@ internal static class SettingsStore
         var legacyProximity = JsonSerializer.Deserialize<ProximitySettings>("""{"Enabled":false,"PhoneId":"phone","SignalThreshold":-75}""");
         if (legacyProximity?.SignalHysteresis != 5) throw new InvalidOperationException("Older signal settings lost their default recovery buffer.");
         VerifyProximity();
+        Trace("Opening proximity test window");
         using (var testForm = new ProximityForm(new(false, "test-phone"), () => [new("test-phone", "Phone", true, -60, DateTimeOffset.UtcNow)], () => null))
         {
             testForm.Show(); VerifyButtonBounds(testForm);

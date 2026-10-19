@@ -19,10 +19,9 @@ internal sealed class AppDialog : ChromeForm
         void UpdateScrolling()
         {
             if (!details.IsHandleCreated || details.ClientSize.Width <= 4) return;
-            int needed = TextRenderer.MeasureText(details.Text, details.Font, new Size(details.ClientSize.Width - 4, int.MaxValue), TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl).Height;
+            int needed = TextRenderer.MeasureText(details.Text, details.Font, new Size(details.ClientSize.Width - 4, 10000), TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl).Height;
             details.ScrollBars = needed > details.ClientSize.Height ? ScrollBars.Vertical : ScrollBars.None;
         }
-        details.SizeChanged += (_, _) => UpdateScrolling();
         Shown += (_, _) => { UpdateScrolling(); details.Select(0, 0); if (AcceptButton is Control target) target.Focus(); };
         var footer = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill, WrapContents = false };
         var accept = new ThemeButton { Text = buttons == MessageBoxButtons.YesNo ? yesText : "知道了", Primary = true, Size = new Size(128, 42), Margin = new Padding(10, 8, 0, 0), DialogResult = buttons == MessageBoxButtons.YesNo ? DialogResult.Yes : DialogResult.OK };
