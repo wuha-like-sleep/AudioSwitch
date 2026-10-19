@@ -30,6 +30,10 @@ internal class ChromeForm : Form
         bar.MouseDown += DragWindow; caption.MouseDown += DragWindow; mark.MouseDown += DragWindow;
         Controls.Add(bar);
     }
+    protected override CreateParams CreateParams
+    {
+        get { var parameters = base.CreateParams; parameters.ClassStyle |= 0x00020000; return parameters; }
+    }
     protected override void OnShown(EventArgs e)
     {
         var area = Screen.FromControl(this).WorkingArea;
@@ -53,18 +57,16 @@ internal class ChromeForm : Form
     protected override void OnHandleCreated(EventArgs e)
     {
         base.OnHandleCreated(e);
-        int preference = 2;
-        _ = DwmSetWindowAttribute(Handle, 33, ref preference, sizeof(int));
+        WindowSurface.Apply(Handle);
     }
     protected override void OnPaint(PaintEventArgs e)
     {
         base.OnPaint(e);
-        using var border = new Pen(Color.FromArgb(219, 226, 239));
+        using var border = new Pen(Color.FromArgb(225, 230, 238));
         e.Graphics.DrawRectangle(border, 0, 0, Width - 1, Height - 1);
     }
     [DllImport("user32.dll")] private static extern bool ReleaseCapture();
     [DllImport("user32.dll")] private static extern IntPtr SendMessage(IntPtr window, uint message, IntPtr wparam, IntPtr lparam);
-    [DllImport("dwmapi.dll")] private static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
 }
 
 internal sealed class CaptionButton(bool close, Action action) : Control

@@ -7,14 +7,16 @@ internal sealed class AppDialog : ChromeForm
     {
         message = text; Text = "AudioSwitch"; Icon = BrandIcon.Load();
         Font = new Font("Microsoft YaHei UI", 10); BackColor = Color.FromArgb(243, 246, 251); ForeColor = Theme.Ink;
-        ClientSize = new Size(560, 370); StartPosition = FormStartPosition.CenterScreen;
-        var body = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(28, 14, 28, 24), ColumnCount = 1, RowCount = 4 };
+        ClientSize = new Size(560, text.Length > 260 || text.Count(c => c == '\n') > 6 ? 440 : 340); StartPosition = FormStartPosition.CenterScreen;
+        var body = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(28, 14, 28, 20), ColumnCount = 1, RowCount = 4 };
         body.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); body.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-        body.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); body.RowStyles.Add(new RowStyle(SizeType.Absolute, 56));
+        body.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); body.RowStyles.Add(new RowStyle(SizeType.Absolute, 62));
         body.Controls.Add(new Label { Text = title.Replace("AudioSwitch · ", ""), AutoSize = false, Dock = DockStyle.Fill, Font = new Font(Font.FontFamily, 18, FontStyle.Bold) }, 0, 0);
-        body.Controls.Add(new Label { Text = icon == MessageBoxIcon.Error || icon == MessageBoxIcon.Warning ? "请查看以下信息后重试" : buttons == MessageBoxButtons.YesNo ? "请确认以下操作" : "音频切换 · 版本与使用提示", Dock = DockStyle.Fill, ForeColor = Theme.Muted }, 0, 1);
-        var details = new TextBox { Text = text.ReplaceLineEndings(Environment.NewLine), Multiline = true, ReadOnly = true, BorderStyle = BorderStyle.None, BackColor = BackColor, ForeColor = Theme.Ink, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill, TabStop = true };
-        body.Controls.Add(details, 0, 2);
+        body.Controls.Add(new Label { Text = icon == MessageBoxIcon.Error || icon == MessageBoxIcon.Warning ? "操作未完成 · 请查看详细信息" : buttons == MessageBoxButtons.YesNo ? "需要你的确认" : "状态提示", Dock = DockStyle.Fill, ForeColor = Theme.Muted }, 0, 1);
+        var details = new TextBox { Text = text.ReplaceLineEndings(Environment.NewLine), Multiline = true, ReadOnly = true, BorderStyle = BorderStyle.None, BackColor = Color.White, ForeColor = Theme.Ink, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill, TabStop = true };
+        var content = new RoundedPanel { Dock = DockStyle.Fill, Padding = new Padding(16, 14, 16, 14), Margin = new Padding(0, 8, 0, 4) };
+        content.Controls.Add(details); body.Controls.Add(content, 0, 2);
+        Shown += (_, _) => { details.Select(0, 0); if (AcceptButton is Control target) target.Focus(); };
         var footer = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill, WrapContents = false };
         var accept = new ThemeButton { Text = buttons == MessageBoxButtons.YesNo ? yesText : "知道了", Primary = true, Size = new Size(128, 42), Margin = new Padding(10, 8, 0, 0), DialogResult = buttons == MessageBoxButtons.YesNo ? DialogResult.Yes : DialogResult.OK };
         footer.Controls.Add(accept); AcceptButton = accept;
@@ -26,7 +28,7 @@ internal sealed class AppDialog : ChromeForm
         }
         else CancelButton = accept;
         var copy = new ThemeButton { Text = "复制信息", Size = new Size(110, 42), Margin = new Padding(10, 8, 0, 0) };
-        copy.Click += (_, _) => Clipboard.SetText(message); footer.Controls.Add(copy);
+        copy.Click += (_, _) => { try { Clipboard.SetText(message); copy.Text = "已复制"; } catch (System.Runtime.InteropServices.ExternalException) { copy.Text = "请重试复制"; } }; footer.Controls.Add(copy);
         body.Controls.Add(footer, 0, 3); Controls.Add(body); body.BringToFront();
     }
     public static DialogResult Show(string text, string title, MessageBoxButtons buttons = MessageBoxButtons.OK, MessageBoxIcon icon = MessageBoxIcon.Information)

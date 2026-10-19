@@ -16,7 +16,7 @@ internal sealed class UpdateService : IDisposable
     private bool manualOpen;
     private UpdateProgressForm? activeProgress;
     internal static string Repository => Assembly.GetExecutingAssembly().GetCustomAttributes<AssemblyMetadataAttribute>().FirstOrDefault(a => a.Key == "GitHubRepository")?.Value ?? "";
-    internal static string CurrentTag => Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.3.10-preview.1";
+    internal static string CurrentTag => Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion.Split('+')[0] ?? "0.3.11-preview.1";
     public UpdateService(Action<string> notify)
     {
         this.notify = notify;
@@ -158,12 +158,14 @@ internal sealed class UpdateProgressForm : ChromeForm
     public UpdateProgressForm(string title = "下载更新", string initialStatus = "正在下载安装包…")
     {
         token = cancellation.Token;
-        Text = "AudioSwitch · " + title; Icon = BrandIcon.Load(); ClientSize = new Size(500, 280);
+        Text = "AudioSwitch · " + title; Icon = BrandIcon.Load(); ClientSize = new Size(520, 300);
         StartPosition = FormStartPosition.CenterScreen; Font = new Font("Microsoft YaHei UI", 10); BackColor = Color.FromArgb(243, 246, 251);
         var body = new TableLayoutPanel { Dock = DockStyle.Fill, Padding = new Padding(28, 14, 28, 20), ColumnCount = 1, RowCount = 4 };
         body.RowStyles.Add(new RowStyle(SizeType.Absolute, 42)); body.RowStyles.Add(new RowStyle(SizeType.Absolute, 48)); body.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); body.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
         body.Controls.Add(new Label { Text = title, Dock = DockStyle.Fill, Font = new Font(Font.FontFamily, 18, FontStyle.Bold), ForeColor = Theme.Ink }, 0, 0);
-        status.Text = initialStatus; body.Controls.Add(status, 0, 1); body.Controls.Add(bar, 0, 2);
+        status.Text = initialStatus; body.Controls.Add(status, 0, 1);
+        var surface = new RoundedPanel { Dock = DockStyle.Fill, Padding = new Padding(18, 20, 18, 12), Margin = new Padding(0, 4, 0, 8) };
+        surface.Controls.Add(bar); body.Controls.Add(surface, 0, 2);
         var footer = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill };
         var cancel = new ThemeButton { Text = "取消", Size = new Size(110, 42) };
         cancel.Click += (_, _) => Close(); footer.Controls.Add(cancel); body.Controls.Add(footer, 0, 3);
