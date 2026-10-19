@@ -76,9 +76,8 @@ internal sealed class ThemeButton : Control, IButtonControl
         using var path = Theme.Round(new RectangleF(1, 1, Width - 2, Height - 2), 10 * DeviceDpi / 96f);
         var color = !Enabled ? Color.FromArgb(235, 239, 246) : Primary ? (hover ? Color.FromArgb(53, 72, 202) : Theme.Accent) : (hover ? Color.FromArgb(234, 239, 249) : Color.White);
         using var fill = new SolidBrush(color); e.Graphics.FillPath(fill, path);
-        if (!Primary || Focused) { using var border = new Pen(Focused ? Theme.Accent : Color.FromArgb(221, 228, 241), Focused ? 2 : 1); e.Graphics.DrawPath(border, path); }
+        if (!Primary || Focused) { using var border = new Pen(Focused ? (Primary ? Color.FromArgb(178, 188, 255) : Theme.Accent) : Color.FromArgb(221, 228, 241), Focused ? 2 : 1); e.Graphics.DrawPath(border, path); }
         TextRenderer.DrawText(e.Graphics, Text, Font, ClientRectangle, !Enabled ? Theme.Muted : Primary ? Color.White : Theme.Ink, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter);
-        if (Focused) ControlPaint.DrawFocusRectangle(e.Graphics, Rectangle.Inflate(ClientRectangle, -6, -6));
     }
 }
 internal sealed class Toggle : Control
