@@ -16,7 +16,14 @@ internal sealed class AppDialog : ChromeForm
         var details = new TextBox { Text = text.ReplaceLineEndings(Environment.NewLine), Multiline = true, ReadOnly = true, BorderStyle = BorderStyle.None, BackColor = Color.White, ForeColor = Theme.Ink, ScrollBars = ScrollBars.Vertical, Dock = DockStyle.Fill, TabStop = true };
         var content = new RoundedPanel { Dock = DockStyle.Fill, Padding = new Padding(16, 14, 16, 14), Margin = new Padding(0, 8, 0, 4) };
         content.Controls.Add(details); body.Controls.Add(content, 0, 2);
-        Shown += (_, _) => { details.Select(0, 0); if (AcceptButton is Control target) target.Focus(); };
+        void UpdateScrolling()
+        {
+            if (!details.IsHandleCreated || details.ClientSize.Width <= 4) return;
+            int needed = TextRenderer.MeasureText(details.Text, details.Font, new Size(details.ClientSize.Width - 4, int.MaxValue), TextFormatFlags.WordBreak | TextFormatFlags.TextBoxControl).Height;
+            details.ScrollBars = needed > details.ClientSize.Height ? ScrollBars.Vertical : ScrollBars.None;
+        }
+        details.SizeChanged += (_, _) => UpdateScrolling();
+        Shown += (_, _) => { UpdateScrolling(); details.Select(0, 0); if (AcceptButton is Control target) target.Focus(); };
         var footer = new FlowLayoutPanel { FlowDirection = FlowDirection.RightToLeft, Dock = DockStyle.Fill, WrapContents = false };
         var accept = new ThemeButton { Text = buttons == MessageBoxButtons.YesNo ? yesText : "知道了", Primary = true, Size = new Size(128, 42), Margin = new Padding(10, 8, 0, 0), DialogResult = buttons == MessageBoxButtons.YesNo ? DialogResult.Yes : DialogResult.OK };
         footer.Controls.Add(accept); AcceptButton = accept;
