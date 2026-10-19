@@ -187,3 +187,5 @@ CI 检查虚构记录的 DPAPI 往返、密文不含测试密码、受限令牌�
 提示正文放入统一白色内容区，缩短短消息窗口，长消息保留滚动；打开后清除默认文本选择并聚焦操作按钮。复制按钮提供反馈，下载进度增加一致的内容表面，统一边框与间距。切换提示的 WS_EX_NOACTIVATE、鼠标穿透、独立屏幕定位与显示时长保持原有行为；不更改认证或凭据逻辑。
 
 参考：[Microsoft 系统圆角说明](https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/ui/apply-rounded-corners)。
+
+0.3.11 Preview 1 发行代码：`6f46e8c5593a9b10a8ab7a4b1bcec354859735ad`。[Windows CI 39199601349](https://github.com/wuha-like-sleep/AudioSwitch/actions/runs/39199601349) 三架构构建、x64 安装、保存 / 确认弹窗交互、设置、登录组件检查通过；实际提示与进度窗口截图已核对。滚动条仅在窗口显示后计算一次，避免 SizeChanged 回调反复布局；按钮焦点采用圆角描边。系统合成器的外部阴影与真机 Windows 11 圆角不由 PrintWindow 位图证明。
