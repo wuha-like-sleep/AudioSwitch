@@ -200,6 +200,6 @@ CI 检查虚构记录的 DPAPI 往返、密文不含测试密码、受限令牌�
 
 ### 0.3.13：登录 Windows 后的自启动
 
-专门检查 `--startup` 路径。核心托盘、快捷键及消息循环先就绪，自动检查更新延后 30 秒，离开锁屏监测不增加延时。新增仅在自启动时生成的 `startup-timing.json`，记录进程创建时间和各阶段耗时，诊断信息可复制；后台原子写入，后续轮询不重复写入。Windows Run 启动项可能由系统延后调度，本记录不包含进程创建前等待，不能称为从登录到可用的完整耗时。[微软说明](https://learn.microsoft.com/en-us/windows/win32/setupapi/run-and-runonce-registry-keys)。不修改系统全局启动延迟或账户权限。
+专门检查 `--startup` 路径。核心托盘、快捷键及消息循环先就绪，更新模块（含 HttpClient）按需创建，自动检查更新延后 30 秒，离开锁屏监测不增加延时。新增仅在自启动时生成的 `startup-timing.json`，记录进程创建时间和各阶段耗时，诊断信息可复制；后台原子写入，后续轮询不重复写入。Windows Run 启动项可能由系统延后调度，本记录不包含进程创建前等待，不能称为从登录到可用的完整耗时。[微软说明](https://learn.microsoft.com/en-us/windows/win32/setupapi/run-and-runonce-registry-keys)。不修改系统全局启动延迟或账户权限。
 
 安装检查实际运行 `--startup`，要求不出现设置窗口、快捷键注册成功、音频后台读取完成，并保存分阶段结果。CI 不是实际重启 / 用户登录，无法验证系统拉起前的等待时间。

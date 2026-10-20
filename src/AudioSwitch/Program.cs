@@ -106,7 +106,8 @@ internal sealed class TrayContext : ApplicationContext
     private readonly ToolStripMenuItem outputItem = new("正在读取输出…") { Enabled = false };
     private readonly ToolStripMenuItem deviceMenu = new("选择输出设备");
     private string? deviceMenuSignature;
-    private readonly UpdateService updates;
+    private readonly Lazy<UpdateService> updateService;
+    private UpdateService updates => updateService.Value;
     private readonly StartupTiming? startupTiming;
     private readonly System.Windows.Forms.Timer delayedUpdates = new() { Interval = 30000 };
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 2500 };
@@ -130,7 +131,7 @@ internal sealed class TrayContext : ApplicationContext
         this.startupTiming = startupTiming;
         tray = new NotifyIcon { Icon = BrandIcon.Load(), Text = "音频切换", ContextMenuStrip = menu, Visible = true };
         startupTiming?.Mark("TrayCreated");
-        updates = new UpdateService(message => Notify(message));
+        updateService = new Lazy<UpdateService>(() => new UpdateService(message => Notify(message)));
         try
         {
             settings = SettingsStore.Read(configPath);
@@ -391,7 +392,7 @@ internal sealed class TrayContext : ApplicationContext
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { disposed = true; delayedUpdates.Dispose(); SystemEvents.SessionSwitch -= SessionChanged; SystemEvents.PowerModeChanged -= PowerChanged; bluetooth.Dispose(); timer.Stop(); timer.Dispose(); toast?.Dispose(); updates.Dispose(); hotkey.Dispose(); tray.Visible = false; tray.Dispose(); menu.Dispose(); }
+        if (disposing) { disposed = true; delayedUpdates.Dispose(); SystemEvents.SessionSwitch -= SessionChanged; SystemEvents.PowerModeChanged -= PowerChanged; bluetooth.Dispose(); timer.Stop(); timer.Dispose(); toast?.Dispose(); if (updateService.IsValueCreated) updateService.Value.Dispose(); hotkey.Dispose(); tray.Visible = false; tray.Dispose(); menu.Dispose(); }
         base.Dispose(disposing);
     }
 }
