@@ -12,7 +12,8 @@ internal static class StartupService
         get { using var identity = WindowsIdentity.GetCurrent(); return identity.User?.Value ?? throw new InvalidOperationException("无法读取当前用户。"); }
     }
     private static string TaskName => "AudioSwitch-Logon-" + Sid;
-    private static bool Missing(COMException error) => error.HResult == unchecked((int)0x80070002);
+    private static bool Missing(Exception error) => error.HResult == unchecked((int)0x80070002);
+    private static bool SchedulerUnavailable(Exception error) => error is COMException or UnauthorizedAccessException or FileNotFoundException;
     private static void Release(object? value) { if (value != null && Marshal.IsComObject(value)) Marshal.FinalReleaseComObject(value); }
     private static T WithFolder<T>(Func<dynamic, T> action)
     {
@@ -30,7 +31,7 @@ internal static class StartupService
     {
         object? task = null;
         try { task = folder.GetTask(TaskName); return (bool)((dynamic)task).Enabled; }
-        catch (COMException ex) when (Missing(ex)) { return false; }
+        catch (Exception ex) when (Missing(ex)) { return false; }
         finally { Release(task); }
     });
     private static bool RunEnabled
@@ -39,12 +40,12 @@ internal static class StartupService
     }
     public static bool Enabled
     {
-        get { try { if (TaskEnabled()) return true; } catch (COMException) { } return RunEnabled; }
+        get { try { if (TaskEnabled()) return true; } catch (Exception ex) when (SchedulerUnavailable(ex)) { } return RunEnabled; }
     }
     public static string Describe()
     {
         try { if (TaskEnabled()) return "登录任务 · 当前用户登录触发，无额外延时"; }
-        catch (COMException) { }
+        catch (Exception ex) when (SchedulerUnavailable(ex)) { }
         return RunEnabled ? "普通启动项 · 系统可能延后调度" : "关闭";
     }
     public static void SetEnabled(bool enabled)
@@ -57,7 +58,7 @@ internal static class StartupService
             WithFolder<bool>(folder =>
             {
                 try { folder.DeleteTask(TaskName, 0); }
-                catch (COMException ex) when (Missing(ex)) { }
+                catch (Exception ex) when (Missing(ex)) { }
                 return true;
             });
             return;
@@ -85,7 +86,7 @@ internal static class StartupService
             });
             key.DeleteValue("AudioSwitch", false); // One startup source only after registration succeeded.
         }
-        catch (COMException)
+        catch (Exception ex) when (SchedulerUnavailable(ex))
         {
             key.SetValue("AudioSwitch", $"\"{path}\" --startup", RegistryValueKind.String);
         }
