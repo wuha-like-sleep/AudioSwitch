@@ -2,7 +2,7 @@
   #define Runtime "win-x64"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.3.13"
+  #define AppVersion "0.3.14"
 #endif
 #ifndef SourceDir
   #define SourceDir "..\artifacts\" + Runtime
@@ -120,8 +120,11 @@ Name: "{userdesktop}\AudioSwitch"; Filename: "{app}\AudioSwitch.exe"; Tasks: des
 [Registry]
 ; Always record cleanup, including when startup is enabled later from the app.
 Root: HKCU32; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "AudioSwitch"; Flags: uninsdeletevalue
-Root: HKCU32; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "AudioSwitch"; ValueData: """{app}\AudioSwitch.exe"" --startup"; Tasks: startup
-Root: HKCU32; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueName: "AudioSwitch"; Flags: deletevalue; Tasks: not startup
 
 [Run]
+Filename: "{app}\AudioSwitch.exe"; Parameters: "--enable-startup"; Tasks: startup; Flags: runhidden waituntilterminated
+Filename: "{app}\AudioSwitch.exe"; Parameters: "--disable-startup"; Tasks: not startup; Flags: runhidden waituntilterminated
 Filename: "{app}\AudioSwitch.exe"; Description: "启动 AudioSwitch 并选择设备"; Flags: nowait postinstall skipifsilent
+
+[UninstallRun]
+Filename: "{app}\AudioSwitch.exe"; Parameters: "--disable-startup"; Flags: runhidden waituntilterminated; RunOnceId: "RemoveLogonStartup"

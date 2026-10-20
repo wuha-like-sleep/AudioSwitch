@@ -7,8 +7,20 @@ $process = Start-Process $setup -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES'
 if ($process.ExitCode -ne 0) { throw "Install failed: $($process.ExitCode)" }
 $app = Join-Path $install 'AudioSwitch.exe'
 if (-not (Test-Path $app)) { throw 'Installed application missing' }
-$value = (Get-ItemProperty $run).AudioSwitch
-if ($value -ne "`"$app`" --startup") { throw "Incorrect startup command: $value" }
+$sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+$taskName = "AudioSwitch-Logon-$sid"
+$task = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
+[xml]$taskXml = Export-ScheduledTask -TaskName $taskName
+$taskNode = $taskXml.Task
+if ($taskNode.Actions.Exec.Command -ne $app -or $taskNode.Actions.Exec.Arguments -ne '--startup') { throw 'Incorrect logon task command' }
+if ($taskNode.Principals.Principal.UserId -ne $sid -or $taskNode.Principals.Principal.LogonType -ne 'InteractiveToken' -or
+    $taskNode.Principals.Principal.RunLevel -ne 'LeastPrivilege' -or $taskNode.Triggers.LogonTrigger.UserId -ne $sid) {
+    throw 'Logon task is not scoped to the current interactive user at least privilege'
+}
+if ($taskNode.Triggers.LogonTrigger.Delay -and $taskNode.Triggers.LogonTrigger.Delay -ne 'PT0S') { throw 'Unexpected logon task delay' }
+if ($taskNode.Settings.DisallowStartIfOnBatteries -ne 'false' -or $taskNode.Settings.StopIfGoingOnBatteries -ne 'false' -or
+    $taskNode.Settings.ExecutionTimeLimit -ne 'PT0S') { throw 'Logon task can be stopped by battery or execution limits' }
+if ((Get-ItemProperty $run -ErrorAction SilentlyContinue).AudioSwitch) { throw 'Legacy Run startup was not removed' }
 # Exercise real Windows audio COM interfaces even when the runner has no physical output device.
 foreach ($service in @('AudioEndpointBuilder', 'Audiosrv')) {
     Set-Service $service -StartupType Manual
@@ -120,8 +132,16 @@ try {
 }
 $startupReport = Join-Path $env:LOCALAPPDATA 'AudioSwitch/startup-timing.json'
 Remove-Item $startupReport -ErrorAction SilentlyContinue
-$appProcess = Start-Process $app -ArgumentList '--startup' -PassThru
+# Exercise the registered task action as well as its XML; no actual reboot is simulated.
+Start-ScheduledTask -TaskName $taskName
+$appProcess = $null
 try {
+    for ($attempt = 0; $attempt -lt 60; $attempt++) {
+        Start-Sleep -Milliseconds 100
+        $appProcess = Get-Process AudioSwitch -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($appProcess) { break }
+    }
+    if (-not $appProcess) { throw 'Registered startup task did not launch AudioSwitch' }
     Start-Sleep -Seconds 5
     if ($appProcess.HasExited) { throw "Application exited unexpectedly: $($appProcess.ExitCode)" }
     if ([WindowCapture]::FindVisibleWindow($appProcess.Id) -ne [IntPtr]::Zero) { throw 'Startup unexpectedly opened a visible window' }
@@ -136,11 +156,12 @@ try {
     Copy-Item $startupReport (Join-Path $PSScriptRoot '../artifacts/logon-startup-timing.json')
     Write-Host (Get-Content $startupReport -Raw)
 } finally {
-    if (-not $appProcess.HasExited) { Stop-Process -Id $appProcess.Id; $appProcess.WaitForExit() }
+    if ($appProcess -and -not $appProcess.HasExited) { Stop-Process -Id $appProcess.Id; $appProcess.WaitForExit() }
 }
 $process = Start-Process (Join-Path $install 'unins000.exe') -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART' -Wait -PassThru
 if ($process.ExitCode -ne 0) { throw "Uninstall failed: $($process.ExitCode)" }
 if ((Get-ItemProperty $run -ErrorAction SilentlyContinue).AudioSwitch) { throw 'Startup command was not removed' }
+if (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue) { throw 'Logon startup task was not removed' }
 if (Test-Path $app) { throw 'Application was not removed' }
 Write-Host 'Install, startup registration, application launch and uninstall smoke checks passed.'
 

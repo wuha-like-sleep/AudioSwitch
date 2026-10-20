@@ -20,6 +20,12 @@ internal static class Program
             catch (Exception ex) { File.WriteAllText(args[1], ex.ToString()); Environment.ExitCode = 1; }
             return;
         }
+        if (args.Length == 1 && args[0] is "--enable-startup" or "--disable-startup")
+        {
+            try { StartupService.SetEnabled(args[0] == "--enable-startup"); }
+            catch { Environment.ExitCode = 1; }
+            return;
+        }
         bool startup = args.Contains("--startup");
         var startupTiming = startup ? new StartupTiming() : null;
         ApplicationConfiguration.Initialize();
@@ -129,17 +135,16 @@ internal sealed class TrayContext : ApplicationContext
     public TrayContext(bool startup, StartupTiming? startupTiming = null)
     {
         this.startupTiming = startupTiming;
-        tray = new NotifyIcon { Icon = BrandIcon.Load(), Text = "音频切换", ContextMenuStrip = menu, Visible = true };
-        startupTiming?.Mark("TrayCreated");
-        updateService = new Lazy<UpdateService>(() => new UpdateService(message => Notify(message)));
-        try
-        {
-            settings = SettingsStore.Read(configPath);
-        }
-        catch (Exception ex) { Notify("配置读取失败，请重新选择设备。" + ex.Message, true); }
+        string? configurationError = null;
+        try { settings = SettingsStore.Read(configPath); }
+        catch (Exception ex) { configurationError = "配置读取失败，请重新选择设备。" + ex.Message; }
         hotkey = new HotkeyWindow(() => { if (!configuring) Switch(); }, Configure);
         hotkey.TryChange(settings?.HotkeyModifiers ?? 3, settings?.HotkeyKey ?? Keys.F11);
         startupTiming?.Mark(hotkey.Registered ? "HotkeyReady" : "HotkeyUnavailable");
+        tray = new NotifyIcon { Icon = BrandIcon.Load(), Text = "音频切换", ContextMenuStrip = menu, Visible = true };
+        startupTiming?.Mark("TrayCreated");
+        updateService = new Lazy<UpdateService>(() => new UpdateService(message => Notify(message)));
+        if (configurationError != null) Notify(configurationError, true);
         switchItem = new ToolStripMenuItem("循环切换输出", null, (_, _) => Switch());
         menu.Items.Add(outputItem);
         menu.Items.Add(new ToolStripSeparator());
@@ -156,7 +161,7 @@ internal sealed class TrayContext : ApplicationContext
         pauseLock.CheckedChanged += (_, _) => { proximityGuard.Reset(); RefreshProximity(); };
         menu.Items.Add("检查更新…", null, async (_, _) => await updates.CheckAsync(false));
         menu.Opening += (_, _) => { RefreshMenu(); RefreshStatus(); };
-        RefreshMenu();
+        // Query Task Scheduler only when opening the menu, not on the hotkey startup path.
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("退出", null, (_, _) => ExitThread());
         tray.MouseClick += (_, e) => { if (e.Button == MouseButtons.Left) Switch(); };
