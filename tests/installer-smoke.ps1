@@ -118,10 +118,23 @@ try {
 } finally {
     if (-not $interactive.HasExited) { Stop-Process -Id $interactive.Id; $interactive.WaitForExit() }
 }
+$startupReport = Join-Path $env:LOCALAPPDATA 'AudioSwitch/startup-timing.json'
+Remove-Item $startupReport -ErrorAction SilentlyContinue
 $appProcess = Start-Process $app -ArgumentList '--startup' -PassThru
 try {
     Start-Sleep -Seconds 5
     if ($appProcess.HasExited) { throw "Application exited unexpectedly: $($appProcess.ExitCode)" }
+    if ([WindowCapture]::FindVisibleWindow($appProcess.Id) -ne [IntPtr]::Zero) { throw 'Startup unexpectedly opened a visible window' }
+    $report = Get-Content $startupReport -Raw | ConvertFrom-Json
+    $stages = $report.StagesMilliseconds
+    foreach ($stage in @('ManagedEntry', 'TrayCreated', 'HotkeyReady', 'MessageLoopReady', 'AudioReady')) {
+        if ($null -eq $stages.$stage -or $stages.$stage -lt 0) { throw "Missing startup readiness stage: $stage" }
+    }
+    if ($stages.HotkeyReady -gt $stages.MessageLoopReady -or $stages.MessageLoopReady -gt $stages.AudioReady) {
+        throw 'Audio readiness unexpectedly preceded core startup readiness'
+    }
+    Copy-Item $startupReport (Join-Path $PSScriptRoot '../artifacts/logon-startup-timing.json')
+    Write-Host (Get-Content $startupReport -Raw)
 } finally {
     if (-not $appProcess.HasExited) { Stop-Process -Id $appProcess.Id; $appProcess.WaitForExit() }
 }

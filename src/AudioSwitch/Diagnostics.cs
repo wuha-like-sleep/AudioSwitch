@@ -15,6 +15,7 @@ internal static class Diagnostics
         text.AppendLine("快捷键：" + HotkeyWindow.Describe(settings?.HotkeyModifiers ?? 3, settings?.HotkeyKey ?? Keys.F11) + (hotkeyActive ? " · 已注册" : " · 未注册"));
         try { text.AppendLine("自启动：" + (StartupService.Enabled ? "开启" : "关闭")); }
         catch (Exception ex) { text.AppendLine("自启动读取失败：" + ex.Message); }
+        text.AppendLine(StartupTiming.DescribeLastRun());
         text.AppendLine("切换提示：" + (settings?.ShowSwitchNotifications != false ? "开启" : "关闭"));
         text.AppendLine();
         try

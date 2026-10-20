@@ -20,6 +20,8 @@ internal static class Program
             catch (Exception ex) { File.WriteAllText(args[1], ex.ToString()); Environment.ExitCode = 1; }
             return;
         }
+        bool startup = args.Contains("--startup");
+        var startupTiming = startup ? new StartupTiming() : null;
         ApplicationConfiguration.Initialize();
         using var mutex = new Mutex(true, "Local\\AudioSwitch.Tray", out bool first);
         if (!first) { if (!args.Contains("--startup")) HotkeyWindow.OpenExistingSettings(); return; }
@@ -86,7 +88,7 @@ internal static class Program
             using var preview = new SwitchToast("耳机", "USB 耳机 · Headphones", "", 15000);
             Application.Run(preview); return;
         }
-        using var context = new TrayContext(args.Contains("--startup"));
+        using var context = new TrayContext(startup, startupTiming);
         Application.Run(context);
     }
 }
@@ -105,6 +107,8 @@ internal sealed class TrayContext : ApplicationContext
     private readonly ToolStripMenuItem deviceMenu = new("选择输出设备");
     private string? deviceMenuSignature;
     private readonly UpdateService updates;
+    private readonly StartupTiming? startupTiming;
+    private readonly System.Windows.Forms.Timer delayedUpdates = new() { Interval = 30000 };
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 2500 };
     private readonly BluetoothPresence bluetooth = new();
     private readonly ProximityGuard proximityGuard = new();
@@ -121,9 +125,11 @@ internal sealed class TrayContext : ApplicationContext
     private bool readingAudio, disposed;
     private int audioRevision;
 
-    public TrayContext(bool startup)
+    public TrayContext(bool startup, StartupTiming? startupTiming = null)
     {
+        this.startupTiming = startupTiming;
         tray = new NotifyIcon { Icon = BrandIcon.Load(), Text = "音频切换", ContextMenuStrip = menu, Visible = true };
+        startupTiming?.Mark("TrayCreated");
         updates = new UpdateService(message => Notify(message));
         try
         {
@@ -132,6 +138,7 @@ internal sealed class TrayContext : ApplicationContext
         catch (Exception ex) { Notify("配置读取失败，请重新选择设备。" + ex.Message, true); }
         hotkey = new HotkeyWindow(() => { if (!configuring) Switch(); }, Configure);
         hotkey.TryChange(settings?.HotkeyModifiers ?? 3, settings?.HotkeyKey ?? Keys.F11);
+        startupTiming?.Mark(hotkey.Registered ? "HotkeyReady" : "HotkeyUnavailable");
         switchItem = new ToolStripMenuItem("循环切换输出", null, (_, _) => Switch());
         menu.Items.Add(outputItem);
         menu.Items.Add(new ToolStripSeparator());
@@ -161,8 +168,20 @@ internal sealed class TrayContext : ApplicationContext
         SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
         SynchronizationContext.Current!.Post(_ =>
         {
+            startupTiming?.Mark("MessageLoopReady");
+            if (startupTiming != null) _ = startupTiming.SaveAsync();
             bool configuredAtLaunch = settings != null;
-            if (settings?.AutoCheckUpdates == true) _ = updates.CheckAsync(true);
+            if (startup)
+            {
+                // Core controls are already available; avoid competing for logon resources with HTTP/update work.
+                delayedUpdates.Tick += async (_, _) =>
+                {
+                    delayedUpdates.Stop();
+                    if (!disposed && settings?.AutoCheckUpdates == true) await updates.CheckAsync(true);
+                };
+                delayedUpdates.Start();
+            }
+            else if (settings?.AutoCheckUpdates == true) _ = updates.CheckAsync(true);
             if (!startup) Configure(); else RefreshStatus();
             if (settings?.Proximity?.Enabled == true) bluetooth.Start();
             if (!configuredAtLaunch && settings?.AutoCheckUpdates == true) _ = updates.CheckAsync(true);
@@ -314,6 +333,8 @@ internal sealed class TrayContext : ApplicationContext
         {
             // COM objects are created and released on the worker; only plain data crosses threads.
             var snapshot = await Task.Run(() => (Devices: AudioDevices.List(), Current: AudioDevices.Default()));
+            if (disposed) return;
+            if (startupTiming?.Mark("AudioReady") == true) _ = startupTiming.SaveAsync();
             if (disposed || revision != audioRevision) return;
             var devices = snapshot.Devices;
             var current = snapshot.Current;
@@ -338,6 +359,8 @@ internal sealed class TrayContext : ApplicationContext
         }
         catch (Exception ex)
         {
+            if (disposed) return;
+            if (startupTiming?.Mark("AudioFailed") == true) _ = startupTiming.SaveAsync();
             if (disposed || revision != audioRevision) return;
             tray.Text = "音频切换：无法读取音频状态";
             outputItem.Text = "暂时无法读取音频状态";
@@ -368,7 +391,7 @@ internal sealed class TrayContext : ApplicationContext
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { disposed = true; SystemEvents.SessionSwitch -= SessionChanged; SystemEvents.PowerModeChanged -= PowerChanged; bluetooth.Dispose(); timer.Stop(); timer.Dispose(); toast?.Dispose(); updates.Dispose(); hotkey.Dispose(); tray.Visible = false; tray.Dispose(); menu.Dispose(); }
+        if (disposing) { disposed = true; delayedUpdates.Dispose(); SystemEvents.SessionSwitch -= SessionChanged; SystemEvents.PowerModeChanged -= PowerChanged; bluetooth.Dispose(); timer.Stop(); timer.Dispose(); toast?.Dispose(); updates.Dispose(); hotkey.Dispose(); tray.Visible = false; tray.Dispose(); menu.Dispose(); }
         base.Dispose(disposing);
     }
 }
