@@ -12,7 +12,7 @@ internal static class StartupService
         get { using var identity = WindowsIdentity.GetCurrent(); return identity.User?.Value ?? throw new InvalidOperationException("无法读取当前用户。"); }
     }
     private static string TaskName => "AudioSwitch-Logon-" + Sid;
-    private static bool Missing(COMException error) => error.HResult is unchecked((int)0x80070002) or unchecked((int)0x8004130F);
+    private static bool Missing(COMException error) => error.HResult == unchecked((int)0x80070002);
     private static void Release(object? value) { if (value != null && Marshal.IsComObject(value)) Marshal.FinalReleaseComObject(value); }
     private static T WithFolder<T>(Func<dynamic, T> action)
     {

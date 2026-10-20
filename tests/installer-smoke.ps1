@@ -12,6 +12,7 @@ $taskName = "AudioSwitch-Logon-$sid"
 $task = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
 [xml]$taskXml = Export-ScheduledTask -TaskName $taskName
 $taskNode = $taskXml.Task
+if ($task.Principal.RunLevel -ne 'Limited') { throw 'Logon task requires elevated privileges' }
 $taskXml.Save((Join-Path $PSScriptRoot '../artifacts/logon-task.xml'))
 Write-Host $taskXml.OuterXml
 function Resolve-TaskSid([string]$Identity) {
