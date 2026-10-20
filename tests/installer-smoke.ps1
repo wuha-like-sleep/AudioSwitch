@@ -12,9 +12,17 @@ $taskName = "AudioSwitch-Logon-$sid"
 $task = Get-ScheduledTask -TaskName $taskName -ErrorAction Stop
 [xml]$taskXml = Export-ScheduledTask -TaskName $taskName
 $taskNode = $taskXml.Task
+$taskXml.Save((Join-Path $PSScriptRoot '../artifacts/logon-task.xml'))
+Write-Host $taskXml.OuterXml
+function Resolve-TaskSid([string]$Identity) {
+    if ([string]::IsNullOrWhiteSpace($Identity)) { throw 'Task user is missing' }
+    if ($Identity.StartsWith('S-1-')) { return ([Security.Principal.SecurityIdentifier]$Identity).Value }
+    return ([Security.Principal.NTAccount]$Identity).Translate([Security.Principal.SecurityIdentifier]).Value
+}
 if ($taskNode.Actions.Exec.Command -ne $app -or $taskNode.Actions.Exec.Arguments -ne '--startup') { throw 'Incorrect logon task command' }
-if ($taskNode.Principals.Principal.UserId -ne $sid -or $taskNode.Principals.Principal.LogonType -ne 'InteractiveToken' -or
-    $taskNode.Principals.Principal.RunLevel -ne 'LeastPrivilege' -or $taskNode.Triggers.LogonTrigger.UserId -ne $sid) {
+if ((Resolve-TaskSid $taskNode.Principals.Principal.UserId) -ne $sid -or $taskNode.Principals.Principal.LogonType -ne 'InteractiveToken' -or
+    ($taskNode.Principals.Principal.RunLevel -and $taskNode.Principals.Principal.RunLevel -ne 'LeastPrivilege') -or
+    (Resolve-TaskSid $taskNode.Triggers.LogonTrigger.UserId) -ne $sid) {
     throw 'Logon task is not scoped to the current interactive user at least privilege'
 }
 if ($taskNode.Triggers.LogonTrigger.Delay -and $taskNode.Triggers.LogonTrigger.Delay -ne 'PT0S') { throw 'Unexpected logon task delay' }

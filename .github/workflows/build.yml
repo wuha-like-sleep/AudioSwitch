@@ -45,6 +45,7 @@ jobs:
           name: Settings-preview
           path: |
             artifacts/*preview.png
+            artifacts/logon-task.xml
             artifacts/logon-startup-timing.json
             artifacts/startup-timing.txt
             artifacts/audio-interfaces.txt
