@@ -101,6 +101,23 @@ foreach ($kind in @('update', 'dialog', 'toast', 'style', 'devices', 'proximity'
     try { Save-Preview $window $kind }
     finally { if (-not $window.HasExited) { Stop-Process -Id $window.Id; $window.WaitForExit() } }
 }
+# Measure the real installed settings path (not the sample preview path).
+$launchTimer = [Diagnostics.Stopwatch]::StartNew()
+$interactive = Start-Process $app -PassThru
+try {
+    do {
+        Start-Sleep -Milliseconds 25
+        $interactive.Refresh()
+        if ($interactive.HasExited) { throw 'Normal application launch exited before showing settings' }
+        $handle = [WindowCapture]::FindVisibleWindow($interactive.Id)
+    } while ($handle -eq [IntPtr]::Zero -and $launchTimer.ElapsedMilliseconds -lt 15000)
+    if ($handle -eq [IntPtr]::Zero) { throw 'Normal settings startup exceeded 15 seconds' }
+    "Installed settings visible: $($launchTimer.ElapsedMilliseconds) ms (warm CI runner; not a user-hardware benchmark)" |
+        Set-Content (Join-Path $PSScriptRoot '../artifacts/startup-timing.txt')
+    Write-Host (Get-Content (Join-Path $PSScriptRoot '../artifacts/startup-timing.txt'))
+} finally {
+    if (-not $interactive.HasExited) { Stop-Process -Id $interactive.Id; $interactive.WaitForExit() }
+}
 $appProcess = Start-Process $app -ArgumentList '--startup' -PassThru
 try {
     Start-Sleep -Seconds 5

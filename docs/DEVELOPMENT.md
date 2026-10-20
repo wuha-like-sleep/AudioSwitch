@@ -189,3 +189,9 @@ CI 检查虚构记录的 DPAPI 往返、密文不含测试密码、受限令牌�
 参考：[Microsoft 系统圆角说明](https://learn.microsoft.com/en-us/windows/apps/desktop/modernize/ui/apply-rounded-corners)。
 
 0.3.11 Preview 1 发行代码：`6f46e8c5593a9b10a8ab7a4b1bcec354859735ad`。[Windows CI 39199601349](https://github.com/wuha-like-sleep/AudioSwitch/actions/runs/39199601349) 三架构构建、x64 安装、保存 / 确认弹窗交互、设置、登录组件检查通过；实际提示与进度窗口截图已核对。滚动条仅在窗口显示后计算一次，避免 SizeChanged 回调反复布局；按钮焦点采用圆角描边。系统合成器的外部阴影与真机 Windows 11 圆角不由 PrintWindow 位图证明。
+
+### 0.3.12：侧边动效与启动响应
+
+切换提示用单一 UI 定时器及 Stopwatch 计算缓动，260ms 入场、180ms 离场；停留时间在入场完成后计算。左右方向随四角选择，整个窗口始终留在目标工作区，避免多屏时进入邻屏。关闭 Windows 客户区动画或远程桌面时直接显示，保留 NOACTIVATE / HTTRANSPARENT。窗口载入时先定位，避免首帧出现在错误位置；关闭时释放两个定时器。
+
+设置窗口先显示，音频 COM 枚举在后台创建并释放，只返回设备数据；移除打开设置时的重复枚举。状态读取最多同时一份，保存或切换使旧读取结果失效，退出后不再更新界面。蓝牙启动移至消息循环之后，设置窗口打开期间仍暂停正式锁屏。安装检查新增真实设置启动路径耗时记录；CI 热启动时间不代表用户电脑冷启动，也没有旧版本对照，不能声称加速百分比。

@@ -1,4 +1,7 @@
 
+using System.Diagnostics;
+using System.Runtime.InteropServices;
+
 namespace AudioSwitch;
 // Non-activating, click-through desktop overlay. Exclusive fullscreen rendering may cover it.
 internal sealed class SwitchToast : Form
@@ -6,6 +9,11 @@ internal sealed class SwitchToast : Form
     private readonly string preferredMonitor;
     private readonly string corner;
     private readonly System.Windows.Forms.Timer timer = new() { Interval = 2200 };
+    private readonly System.Windows.Forms.Timer motion = new() { Interval = 15 };
+    private readonly Stopwatch elapsed = new();
+    private Point settled, edge;
+    private bool leaving;
+    private bool animate;
     protected override bool ShowWithoutActivation => true;
     protected override CreateParams CreateParams
     {
@@ -33,20 +41,59 @@ internal sealed class SwitchToast : Form
         body.Controls.Add(new Label { Text = label is "耳机" or "音箱" ? "已切换到" + label : label, Font = new Font(Font.FontFamily, 12, FontStyle.Bold), Dock = DockStyle.Fill }, 1, 0);
         body.Controls.Add(new Label { Text = name, ForeColor = Theme.Muted, Dock = DockStyle.Fill, AutoEllipsis = true }, 1, 1);
         Controls.Add(body);
-        timer.Tick += (_, _) => Close();
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            if (!animate) { Close(); return; }
+            leaving = true;
+            elapsed.Restart();
+            motion.Start();
+        };
+        motion.Tick += (_, _) => AdvanceMotion();
         Shown += (_, _) =>
         {
-            PlaceOnSelectedMonitor();
-            timer.Start();
+            if (animate)
+            {
+                elapsed.Restart();
+                motion.Start();
+            }
+            else timer.Start();
         };
+    }
+    protected override void OnLoad(EventArgs e)
+    {
+        base.OnLoad(e);
+        PlaceOnSelectedMonitor();
+        animate = !SystemInformation.TerminalServerSession
+            && SystemParametersInfo(0x1042, 0, out bool enabled, 0) && enabled;
+        if (animate) Location = edge;
     }
     private void PlaceOnSelectedMonitor()
     {
         var area = ToastPlacement.Resolve(preferredMonitor).WorkArea;
         if (Width > area.Width) Width = area.Width;
         if (Height > area.Height) Height = area.Height;
-        Location = ToastPlacement.Position(area, Size, (int)Math.Round(24 * DeviceDpi / 96f), corner);
+        settled = ToastPlacement.Position(area, Size, (int)Math.Round(24 * DeviceDpi / 96f), corner);
+        // Stay inside this display: sliding from outside can flash on a neighbouring monitor.
+        edge = new Point(corner is "top-left" or "bottom-left" ? area.Left : area.Right - Width, settled.Y);
+        Location = settled;
+        if (motion.Enabled) { motion.Stop(); if (leaving) Close(); else timer.Start(); }
     }
+    private void AdvanceMotion()
+    {
+        double progress = Math.Clamp(elapsed.Elapsed.TotalMilliseconds / (leaving ? 180 : 260), 0, 1);
+        double eased = leaving ? progress * progress * progress : 1 - Math.Pow(1 - progress, 3);
+        Point from = leaving ? settled : edge, to = leaving ? edge : settled;
+        Location = new Point((int)Math.Round(from.X + (to.X - from.X) * eased), settled.Y);
+        if (progress < 1) return;
+        motion.Stop();
+        if (leaving) Close(); else timer.Start(); // Full configured dwell time after entry.
+    }
+    [DllImport("user32.dll", EntryPoint = "SystemParametersInfoW")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SystemParametersInfo(uint action, uint parameter,
+        [MarshalAs(UnmanagedType.Bool)] out bool value, uint flags);
+
     protected override void OnHandleCreated(EventArgs e) { base.OnHandleCreated(e); WindowSurface.Apply(Handle); }
     protected override void OnPaint(PaintEventArgs e)
     {
@@ -61,5 +108,5 @@ internal sealed class SwitchToast : Form
         if (m.Msg == 0x0084) { m.Result = new IntPtr(-1); return; } // HTTRANSPARENT
         base.WndProc(ref m);
     }
-    protected override void Dispose(bool disposing) { if (disposing) timer.Dispose(); base.Dispose(disposing); }
+    protected override void Dispose(bool disposing) { if (disposing) { timer.Dispose(); motion.Dispose(); } base.Dispose(disposing); }
 }

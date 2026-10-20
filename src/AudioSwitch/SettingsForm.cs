@@ -210,7 +210,7 @@ internal sealed class SettingsForm : ChromeForm
         Controls.Add(root); root.BringToFront(); AcceptButton = save; CancelButton = cancel;
         knownDevices = devices.ToList();
         UpdateDeviceSummary();
-        outputStatus.Text = "设备状态自动刷新";
+        outputStatus.Text = devices.Count == 0 ? "正在读取音频设备…" : "设备状态自动刷新";
         original = CurrentDraft();
         FormClosing += (_, e) =>
         {

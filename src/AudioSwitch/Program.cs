@@ -118,6 +118,8 @@ internal sealed class TrayContext : ApplicationContext
     private SwitchToast? toast;
     private string? lastError;
     private string? previousOutput;
+    private bool readingAudio, disposed;
+    private int audioRevision;
 
     public TrayContext(bool startup)
     {
@@ -153,7 +155,6 @@ internal sealed class TrayContext : ApplicationContext
         timer.Tick += (_, _) => { RefreshStatus(); RefreshProximity(); };
         SystemEvents.SessionSwitch += SessionChanged;
         SystemEvents.PowerModeChanged += PowerChanged;
-        if (settings?.Proximity?.Enabled == true) bluetooth.Start();
         timer.Start();
         if (!hotkey.Registered) Notify("快捷键注册失败，可能已被其他程序占用。请在设置中更换。", true);
         // Open setup after the WinForms message loop starts.
@@ -163,6 +164,7 @@ internal sealed class TrayContext : ApplicationContext
             bool configuredAtLaunch = settings != null;
             if (settings?.AutoCheckUpdates == true) _ = updates.CheckAsync(true);
             if (!startup) Configure(); else RefreshStatus();
+            if (settings?.Proximity?.Enabled == true) bluetooth.Start();
             if (!configuredAtLaunch && settings?.AutoCheckUpdates == true) _ = updates.CheckAsync(true);
         }, null);
     }
@@ -184,9 +186,9 @@ internal sealed class TrayContext : ApplicationContext
         configuring = true;
         try
         {
-            using var form = new SettingsForm(AudioDevices.List(), settings, SaveSettings, () => updates.CheckAsync(false), Switch, () => AppDialog.Show(Diagnostics.Build(settings, hotkey.Registered), "诊断信息"), ConfigureProximity);
+            using var form = new SettingsForm([], settings, SaveSettings, () => updates.CheckAsync(false), Switch, () => AppDialog.Show(Diagnostics.Build(settings, hotkey.Registered), "诊断信息"), ConfigureProximity);
             settingsForm = form;
-            RefreshStatus();
+            form.Shown += (_, _) => RefreshStatus();
             form.ShowDialog();
         }
         catch (Exception ex) { AppDialog.Show("读取音频设备失败：" + ex.Message, "无法打开设置"); }
@@ -251,6 +253,7 @@ internal sealed class TrayContext : ApplicationContext
                 if (StartupService.Enabled != oldStartup) StartupService.SetEnabled(oldStartup);
                 throw;
             }
+            audioRevision++;
             settings = candidate;
             proximityGuard.Reset();
             if (settings.Proximity?.Enabled == true) bluetooth.Start();
@@ -277,6 +280,7 @@ internal sealed class TrayContext : ApplicationContext
 
     private void Apply(string id)
     {
+        audioRevision++;
         try
         {
             var device = AudioDevices.List().FirstOrDefault(d => d.Id == id);
@@ -301,12 +305,18 @@ internal sealed class TrayContext : ApplicationContext
         toast.Show();
     }
 
-    private void RefreshStatus()
+    private async void RefreshStatus()
     {
+        if (readingAudio || disposed) return;
+        readingAudio = true;
+        int revision = audioRevision;
         try
         {
-            var devices = AudioDevices.List();
-            var current = AudioDevices.Default();
+            // COM objects are created and released on the worker; only plain data crosses threads.
+            var snapshot = await Task.Run(() => (Devices: AudioDevices.List(), Current: AudioDevices.Default()));
+            if (disposed || revision != audioRevision) return;
+            var devices = snapshot.Devices;
+            var current = snapshot.Current;
             var name = devices.FirstOrDefault(d => d.Id == current)?.Name ?? "无输出设备";
             outputItem.Text = "当前输出：" + name;
             UpdateDeviceMenu(devices, current);
@@ -328,11 +338,13 @@ internal sealed class TrayContext : ApplicationContext
         }
         catch (Exception ex)
         {
+            if (disposed || revision != audioRevision) return;
             tray.Text = "音频切换：无法读取音频状态";
             outputItem.Text = "暂时无法读取音频状态";
             deviceMenu.Enabled = false;
             if (lastError != ex.Message) { Notify("音频状态读取失败：" + ex.Message, true); lastError = ex.Message; }
         }
+        finally { readingAudio = false; }
     }
 
     private void UpdateDeviceMenu(List<OutputDevice> devices, string? current)
@@ -356,7 +368,7 @@ internal sealed class TrayContext : ApplicationContext
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { SystemEvents.SessionSwitch -= SessionChanged; SystemEvents.PowerModeChanged -= PowerChanged; bluetooth.Dispose(); timer.Stop(); timer.Dispose(); toast?.Dispose(); updates.Dispose(); hotkey.Dispose(); tray.Visible = false; tray.Dispose(); menu.Dispose(); }
+        if (disposing) { disposed = true; SystemEvents.SessionSwitch -= SessionChanged; SystemEvents.PowerModeChanged -= PowerChanged; bluetooth.Dispose(); timer.Stop(); timer.Dispose(); toast?.Dispose(); updates.Dispose(); hotkey.Dispose(); tray.Visible = false; tray.Dispose(); menu.Dispose(); }
         base.Dispose(disposing);
     }
 }
