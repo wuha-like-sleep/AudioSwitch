@@ -10,7 +10,7 @@ internal static class Program
     {
         if (args.Length == 2 && args[0] == "--verify-audio")
         {
-            try { AudioDevices.VerifyInterfaces(); File.WriteAllText(args[1], "Audio interfaces verified."); }
+            try { AudioDevices.VerifyInterfaces(); Task.Run(AudioDevices.VerifyInterfaces).GetAwaiter().GetResult(); File.WriteAllText(args[1], "Audio interfaces verified on UI and worker apartments."); }
             catch (Exception ex) { File.WriteAllText(args[1], ex.ToString()); Environment.ExitCode = 1; }
             return;
         }
@@ -319,7 +319,7 @@ internal sealed class TrayContext : ApplicationContext
         {
             var prepared = await SwitchPreparation.PrepareAsync(settings, explicitTarget,
                 startupGrace != null && startupGrace.Elapsed < TimeSpan.FromSeconds(30),
-                () => Task.Run(() => new AudioSnapshot(AudioDevices.List(), AudioDevices.Default())),
+                () => Task.Run(() => new AudioSnapshot(AudioDevices.List(), AudioDevices.Default()), cancellation.Token),
                 token => Task.Delay(350, token),
                 () => ShowSwitchToast("正在准备音频设备", "设备尚未就绪，正在短暂重试…"), cancellation.Token);
             cancellation.Token.ThrowIfCancellationRequested();
@@ -328,7 +328,7 @@ internal sealed class TrayContext : ApplicationContext
             {
                 writing = true;
                 // SetDefault already confirms every role. Never retry a write after an error.
-                await Task.Run(() => AudioDevices.SetDefault(prepared.Device.Id));
+                await Task.Run(() => AudioDevices.SetDefault(prepared.Device.Id), cancellation.Token);
             }
             if (disposed || revision != audioRevision || cancellation.IsCancellationRequested) return;
             ShowSwitchToast(prepared.AlreadyCurrent ? "正在使用此设备" : "已切换输出", prepared.Device.Name);
