@@ -31,6 +31,7 @@ internal static class SettingsStore
     {
         void Trace(string stage) => File.AppendAllText(resultPath + ".trace", stage + Environment.NewLine);
         Trace("Settings verification started");
+        SwitchPreparation.VerifyAsync().GetAwaiter().GetResult();
         string path = Path.Combine(Path.GetDirectoryName(resultPath)!, "settings-roundtrip.json");
         var first = new Settings("test-headphones", "test-speakers");
         var second = new Settings("second-headphones", "test-speakers", 7, Keys.F10, false, "DISPLAY2", false, "top-left", 3000);

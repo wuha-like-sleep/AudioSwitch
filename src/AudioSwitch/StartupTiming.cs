@@ -58,7 +58,8 @@ internal sealed class StartupTiming
             var stages = root.GetProperty("StagesMilliseconds");
             foreach (var (key, label) in new[] { ("ManagedEntry", "进入程序"), ("TrayCreated", "托盘已创建"),
                 ("HotkeyReady", "快捷键已注册"), ("HotkeyUnavailable", "快捷键注册失败"), ("MessageLoopReady", "消息循环就绪"),
-                ("AudioReady", "首次音频读取完成"), ("AudioFailed", "首次音频读取失败") })
+                ("AudioReady", "首次音频读取完成"), ("AudioFailed", "首次音频读取失败"),
+                ("FirstSwitchCompleted", "首次切换处理完成") })
                 if (stages.TryGetProperty(key, out var value)) result.AppendLine($"  {label}：{value.GetInt64()} ms");
             if (!stages.TryGetProperty("AudioReady", out _) && !stages.TryGetProperty("AudioFailed", out _))
                 result.AppendLine("  首次音频读取尚未完成或程序提前退出。");

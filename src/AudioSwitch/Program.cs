@@ -131,10 +131,14 @@ internal sealed class TrayContext : ApplicationContext
     private string? previousOutput;
     private bool readingAudio, disposed;
     private int audioRevision;
+    private bool switching;
+    private CancellationTokenSource? pendingSwitch;
+    private readonly System.Diagnostics.Stopwatch? startupGrace;
 
     public TrayContext(bool startup, StartupTiming? startupTiming = null)
     {
         this.startupTiming = startupTiming;
+        startupGrace = startup ? System.Diagnostics.Stopwatch.StartNew() : null;
         string? configurationError = null;
         try { settings = SettingsStore.Read(configPath); }
         catch (Exception ex) { configurationError = "配置读取失败，请重新选择设备。" + ex.Message; }
@@ -208,6 +212,7 @@ internal sealed class TrayContext : ApplicationContext
             if (settingsForm.WindowState == FormWindowState.Minimized) settingsForm.WindowState = FormWindowState.Normal;
             settingsForm.Activate(); return;
         }
+        CancelPendingSwitch();
         configuring = true;
         try
         {
@@ -230,11 +235,13 @@ internal sealed class TrayContext : ApplicationContext
     {
         if (e.Reason == SessionSwitchReason.SessionLock) sessionLocked = true;
         if (e.Reason == SessionSwitchReason.SessionUnlock) sessionLocked = false;
+        CancelPendingSwitch();
         resetProximity = true;
     }
     private void PowerChanged(object sender, PowerModeChangedEventArgs e)
     {
         suspended = e.Mode == PowerModes.Suspend;
+        if (suspended) CancelPendingSwitch();
         resetProximity = true;
     }
     private void RefreshProximity()
@@ -278,6 +285,7 @@ internal sealed class TrayContext : ApplicationContext
                 if (StartupService.Enabled != oldStartup) StartupService.SetEnabled(oldStartup);
                 throw;
             }
+            CancelPendingSwitch();
             audioRevision++;
             settings = candidate;
             proximityGuard.Reset();
@@ -290,36 +298,55 @@ internal sealed class TrayContext : ApplicationContext
         catch (Exception ex) { return $"保存设置失败：{ex.Message}\r\n错误码：0x{ex.HResult:X8}\r\n你的选择已保留，可以修改后重试。"; }
     }
 
-    private void Switch()
+    private void Switch() => RequestSwitch(null);
+    private void Apply(string id) => RequestSwitch(id);
+    private void CancelPendingSwitch()
+    {
+        try { Volatile.Read(ref pendingSwitch)?.Cancel(); }
+        catch (ObjectDisposedException) { } // A session notification can race UI completion.
+    }
+    private async void RequestSwitch(string? explicitTarget)
     {
         if (settings == null) { Configure(); return; }
+        if (disposed || sessionLocked || suspended) return;
+        if (switching) { ShowSwitchToast("正在切换输出", "请稍候，完成后可再次切换"); return; }
+        switching = true;
+        int revision = ++audioRevision;
+        using var cancellation = new CancellationTokenSource();
+        Volatile.Write(ref pendingSwitch, cancellation);
+        bool writing = false;
         try
         {
-            var devices = AudioDevices.List();
-            var target = SwitchTarget.Choose(settings, AudioDevices.Default(), devices.Select(d => d.Id));
-            if (target == null) { Notify("循环列表中的设备均未连接，请连接设备后重试。", true); return; }
-            Apply(target);
-        }
-        catch (Exception ex) { Notify("切换失败：" + ex.Message, true); }
-    }
-
-    private void Apply(string id)
-    {
-        audioRevision++;
-        try
-        {
-            var device = AudioDevices.List().FirstOrDefault(d => d.Id == id);
-            if (device == null) { Notify("目标设备未连接。请连接设备，或在设置中重新选择。", true); return; }
-            if (AudioDevices.Default() == id)
+            var prepared = await SwitchPreparation.PrepareAsync(settings, explicitTarget,
+                startupGrace != null && startupGrace.Elapsed < TimeSpan.FromSeconds(30),
+                () => Task.Run(() => new AudioSnapshot(AudioDevices.List(), AudioDevices.Default())),
+                token => Task.Delay(350, token),
+                () => ShowSwitchToast("正在准备音频设备", "设备尚未就绪，正在短暂重试…"), cancellation.Token);
+            cancellation.Token.ThrowIfCancellationRequested();
+            if (disposed || revision != audioRevision || sessionLocked || suspended) return;
+            if (!prepared.AlreadyCurrent)
             {
-                ShowSwitchToast("正在使用此设备", device.Name);
-                return;
+                writing = true;
+                // SetDefault already confirms every role. Never retry a write after an error.
+                await Task.Run(() => AudioDevices.SetDefault(prepared.Device.Id));
             }
-            AudioDevices.SetDefault(id);
-            RefreshStatus();
-            ShowSwitchToast("已切换输出", device.Name);
+            if (disposed || revision != audioRevision || cancellation.IsCancellationRequested) return;
+            ShowSwitchToast(prepared.AlreadyCurrent ? "正在使用此设备" : "已切换输出", prepared.Device.Name);
+            if (startupTiming?.Mark("FirstSwitchCompleted") == true) _ = startupTiming.SaveAsync();
         }
-        catch (Exception ex) { Notify("切换未完成，部分默认输出可能已经改变。请检查 Windows 声音设置。\n" + ex.Message, true); }
+        catch (OperationCanceledException) { }
+        catch (Exception ex)
+        {
+            if (!disposed && !cancellation.IsCancellationRequested)
+                Notify(writing ? "切换未完成，部分默认输出可能已经改变。请检查 Windows 声音设置。\n" + ex.Message
+                    : "切换尚未开始：" + ex.Message, true);
+        }
+        finally
+        {
+            Volatile.Write(ref pendingSwitch, null);
+            switching = false;
+            if (!disposed) RefreshStatus();
+        }
     }
 
     private void ShowSwitchToast(string title, string name)
@@ -332,7 +359,7 @@ internal sealed class TrayContext : ApplicationContext
 
     private async void RefreshStatus()
     {
-        if (readingAudio || disposed) return;
+        if (readingAudio || switching || disposed) return;
         readingAudio = true;
         int revision = audioRevision;
         try
@@ -397,7 +424,7 @@ internal sealed class TrayContext : ApplicationContext
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) { disposed = true; delayedUpdates.Dispose(); SystemEvents.SessionSwitch -= SessionChanged; SystemEvents.PowerModeChanged -= PowerChanged; bluetooth.Dispose(); timer.Stop(); timer.Dispose(); toast?.Dispose(); if (updateService.IsValueCreated) updateService.Value.Dispose(); hotkey.Dispose(); tray.Visible = false; tray.Dispose(); menu.Dispose(); }
+        if (disposing) { disposed = true; CancelPendingSwitch(); delayedUpdates.Dispose(); SystemEvents.SessionSwitch -= SessionChanged; SystemEvents.PowerModeChanged -= PowerChanged; bluetooth.Dispose(); timer.Stop(); timer.Dispose(); toast?.Dispose(); if (updateService.IsValueCreated) updateService.Value.Dispose(); hotkey.Dispose(); tray.Visible = false; tray.Dispose(); menu.Dispose(); }
         base.Dispose(disposing);
     }
 }

@@ -2,7 +2,7 @@
   #define Runtime "win-x64"
 #endif
 #ifndef AppVersion
-  #define AppVersion "0.3.14"
+  #define AppVersion "0.3.15"
 #endif
 #ifndef SourceDir
   #define SourceDir "..\artifacts\login-" + Runtime + "\Release"
